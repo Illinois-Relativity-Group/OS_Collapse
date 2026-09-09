@@ -1,0 +1,16 @@
+# Simulation data (supplied per-case; see README)
+/data
+/blender_py311_packages
+
+# Pipeline outputs
+/output/
+*.ply
+*.png
+*.mp4
+
+# Runtime artifacts
+/logs/
+/pipeline.pid
+/pipeline.pid.txt
+__pycache__/
+*.pyc
