@@ -191,7 +191,11 @@ OUT_DIR.mkdir(parents=True, exist_ok=True)
 
 # Same number of field-line levels as the picture
 levels = [ 0.00012, 0.0012, 0.0036, 0.0074, 0.0125, 0.0191, 0.0274, 0.0377, 0.0501, 0.0653]
-levels = [x * 0.25 for x in levels]
+# Rescaled for this case's B_0 = 1e-4 (see OS_Input_Mag). The 0.25 factor was set
+# for a run with ~50x stronger field, which leaves 8 of the 10 levels above this
+# run's |A_phi| peak (7.6e-4) so they produce no contour. 0.0105 puts the top
+# level at ~0.9 of that peak, so all 10 field lines appear.
+levels = [x * 0.0105 for x in levels]
 
 # Smaller = smoother PLY curves, but larger files
 point_spacing = 0.02
