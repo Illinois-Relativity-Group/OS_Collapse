@@ -397,6 +397,19 @@ def load_horizon_data(horizon_path):
         theta = np.array(horizon_dict[t][0])
         radius = np.array(horizon_dict[t][1])
 
+        # A restart rewinds to its checkpoint and re-evolves the stretch the
+        # previous segment had already covered, appending a second copy of the
+        # same surface for those times. Left as-is, theta runs 0..pi/2 and then
+        # jumps back to 0, so create_bh's surface of revolution folds back
+        # through itself. Sort by theta and keep the last (resumed-run) entry.
+        order = np.lexsort((np.arange(len(theta)), theta))
+        theta = theta[order]
+        radius = radius[order]
+
+        keep = np.concatenate([np.diff(theta) > 0, [True]])
+        theta = theta[keep]
+        radius = radius[keep]
+
         horizon_dict[t] = (theta, radius)
 
     return horizon_dict
