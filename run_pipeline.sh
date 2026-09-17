@@ -26,14 +26,33 @@ SAVE_BLENDER="${SAVE_BLENDER:-false}"
 PLOT_WAVE="${PLOT_WAVE:-true}"
 GENERATE_PLY="${GENERATE_PLY:-true}"
 GENERATE_RHO="${GENERATE_RHO:-true}"
-IMAGE_SUBDIR="${IMAGE_SUBDIR:-images}"
+# Keep corrected eta frames separate so old h+_20 renders are not skipped/reused.
+if [[ "$PLOT_WAVE" == "true" ]]; then
+    IMAGE_SUBDIR="${IMAGE_SUBDIR:-images_eta}"
+else
+    IMAGE_SUBDIR="${IMAGE_SUBDIR:-images}"
+fi
 FORCE_RENDER="${FORCE_RENDER:-false}"
 
 HORIZON_FILE="$DATA_DIR/Test_OS_collapse_magnetized_9000_16.hor_surface"
-WAVE_FILE="$DATA_DIR/Test_OS_collapse_magnetized.wave_extraction.6"
+# Use the supplied extraction-4 eta modes; every radius can be selected explicitly.
+WAVE_FILE="${WAVE_FILE:-$DATA_DIR/Test_OS_collapse_magnetized.wave_extraction.4}"
+export WAVE_M_ADM="${WAVE_M_ADM:-1.00071}"  # initial ADM diagnostic for this B0.002 run
+export WAVE_RESTART_POLICY="${WAVE_RESTART_POLICY:-latest}"
+WAVE_HEIGHT_SCALE="${WAVE_HEIGHT_SCALE:-10000}"  # display exaggeration only
+WAVE_HOLE_RADIUS="${WAVE_HOLE_RADIUS:-10}"
+WAVE_R_MAX="${WAVE_R_MAX:-220}"
+WAVE_NR="${WAVE_NR:-220}"
+WAVE_NPHI="${WAVE_NPHI:-160}"
 
 mkdir -p "$OUTPUT_DIR/$IMAGE_SUBDIR" "$OUTPUT_DIR/blend_files" "$PLY_DIR" "$RHO_DIR"
 cd "$ROOT_DIR"
+
+# Validate and plot eta before starting expensive Blender rendering.
+if [[ "$PLOT_WAVE" == "true" ]]; then
+    env -u PYTHONPATH python3 wave_eta.py --input "$WAVE_FILE" --mass "$WAVE_M_ADM" \
+        --restart-policy "$WAVE_RESTART_POLICY" --output "$OUTPUT_DIR/gw_diagnostics/$IMAGE_SUBDIR"
+fi
 
 if [[ "$GENERATE_PLY" == "true" ]]; then
     env -u PYTHONPATH python3 generate_field_lines.py --a-dir "$DATA_DIR" --out-dir "$PLY_DIR" \
@@ -75,7 +94,7 @@ for field in "$DATA_DIR"/a_p_slice_9000_16_*; do
     PYTHONPATH="$BLENDER_PYTHONPATH" "$BLENDER_BIN" -b --python-use-system-env -P plot_3d.py -t "$THREADS" -- \
         "$field" "$ROOT_DIR" "$OUTPUT_DIR" "$HORIZON_FILE" "$PLY_DIR" \
         "$SAVE_BLENDER" 0.04 2 blend_files "$IMAGE_SUBDIR" "$density" "$WAVE_FILE" \
-        "$PLOT_WAVE" 10 2e7 1 220 220 160
+        "$PLOT_WAVE" "$WAVE_HOLE_RADIUS" "$WAVE_HEIGHT_SCALE" 1 "$WAVE_R_MAX" "$WAVE_NR" "$WAVE_NPHI"
 done
 
 echo "Finished. Images are in $OUTPUT_DIR/$IMAGE_SUBDIR"
