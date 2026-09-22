@@ -308,7 +308,7 @@ def plot_GW(
         # --------------------------------------------------------
         # Create material
         # --------------------------------------------------------
-        mat = create_brick_material()
+        mat = create_gw_material()
 
         obj = bpy.data.objects["GWPlane"]
 
@@ -521,6 +521,171 @@ def create_bh(theta, radius):
     obj.data.materials.append(mat)
 
     return obj
+
+
+def create_gw_shader_material(name="GWMaterial"):
+    """Wave-mesh shader ported from blender-gw's shader_twoblue_3.
+
+    Reference: /data/yuhengguo/bhdisk_sol_32/blender-gw/lib/shader_grid_solidlightblue.py
+    (function ``shader_twoblue_3``), as applied in ``lib/plot_single.py``.
+
+    Structure, node for node:
+
+      TexCoord.Object -> Mapping(loc=(0.7,0,0), rot=(0,pi/2,0), scale=(1,1,gz))
+                      -> Gradient(LINEAR) -> ColorRamp   [height -> colour]
+      ColorRamp -> Principled.Base Color and Principled.Emission Color
+      TexCoord.Object -> Mapping(identity) -> Brick -> MixShader.Fac
+      MixShader: Fac=1 (brick body, white)  -> Principled   [solid]
+                 Fac=0 (mortar line, black) -> unconnected  [transparent]
+
+    So the *sheet* is opaque (Alpha 0.95) and only the grid lines are
+    see-through; the old create_brick_material() made the whole sheet
+    translucent at Alpha 0.5, which is why the backdrop washed it out.
+
+    Knobs (defaults reproduce the reference):
+      GW_GRID_SCALE   brick Scale. The reference uses 0.125 over a +/-200
+                      M_sun mesh (~4 M_sun cells); our mesh is +/-220.
+      GW_GRAD_ZSCALE  Mapping z-scale feeding the gradient (reference 0.02).
+                      Gradient Fac = 0.7 + GW_GRAD_ZSCALE * z_local, so with
+                      WAVE_HEIGHT_SCALE=5e5 the peak |h+|=2.7e-5 swings the
+                      ramp over ~0.43..0.97 -- the reference's dynamic range.
+      GW_ALPHA        Principled Alpha (reference 0.95).
+      GW_EMISSION     Emission Strength (reference leaves the 1.0 default,
+                      which is what makes the sheet read as lit, not glassy).
+    """
+    grid_scale = float(os.environ.get("GW_GRID_SCALE", "0.125"))
+    grad_zscale = float(os.environ.get("GW_GRAD_ZSCALE", "0.02"))
+    alpha = float(os.environ.get("GW_ALPHA", "0.95"))
+    emission = float(os.environ.get("GW_EMISSION", "1.0"))
+
+    mat = bpy.data.materials.get(name)
+    if mat is None:
+        mat = bpy.data.materials.new(name)
+    mat.use_nodes = True
+
+    tree = mat.node_tree
+    nodes = tree.nodes
+    links = tree.links
+    nodes.clear()
+
+    # --- Principled BSDF -------------------------------------------------
+    bsdf = nodes.new("ShaderNodeBsdfPrincipled")
+    bsdf.name = "Principled BSDF"
+    bsdf.location = (663.3, 166.8)
+    bsdf.width = 240.0
+    bsdf.distribution = 'MULTI_GGX'
+    bsdf.subsurface_method = 'RANDOM_WALK'
+    bsdf.inputs["Metallic"].default_value = 0.0
+    bsdf.inputs["Roughness"].default_value = 1.0
+    bsdf.inputs["IOR"].default_value = 1.5
+    bsdf.inputs["Alpha"].default_value = alpha
+    if "Diffuse Roughness" in bsdf.inputs:
+        bsdf.inputs["Diffuse Roughness"].default_value = 0.0
+    if "Emission Strength" in bsdf.inputs:
+        bsdf.inputs["Emission Strength"].default_value = emission
+
+    # --- Output ----------------------------------------------------------
+    output = nodes.new("ShaderNodeOutputMaterial")
+    output.name = "Material Output"
+    output.location = (1843.4, 226.0)
+    output.is_active_output = True
+    output.target = 'ALL'
+
+    # --- Brick texture (grid lines) --------------------------------------
+    brick = nodes.new("ShaderNodeTexBrick")
+    brick.name = "Brick Texture"
+    brick.location = (1007.6, -217.4)
+    brick.width = 150.0
+    brick.offset = 0.0
+    brick.offset_frequency = 2
+    brick.squash = 1.0
+    brick.squash_frequency = 2
+    brick.inputs["Color1"].default_value = (1.0, 1.0, 1.0, 1.0)
+    brick.inputs["Color2"].default_value = (1.0, 1.0, 1.0, 1.0)
+    brick.inputs["Mortar"].default_value = (0.0, 0.0, 0.0, 1.0)
+    brick.inputs["Scale"].default_value = grid_scale
+    brick.inputs["Mortar Size"].default_value = 0.014999999664723873
+    brick.inputs["Mortar Smooth"].default_value = 1.0
+    brick.inputs["Bias"].default_value = 0.0
+    brick.inputs["Brick Width"].default_value = 0.5
+    brick.inputs["Row Height"].default_value = 0.5
+
+    mix = nodes.new("ShaderNodeMixShader")
+    mix.name = "Mix Shader"
+    mix.location = (1614.9, 93.1)
+
+    mapping_brick = nodes.new("ShaderNodeMapping")
+    mapping_brick.name = "Mapping.002"
+    mapping_brick.location = (776.8, -331.1)
+    mapping_brick.vector_type = 'POINT'
+    mapping_brick.inputs["Location"].default_value = (0.0, 0.0, 0.0)
+    mapping_brick.inputs["Rotation"].default_value = (0.0, 0.0, 0.0)
+    mapping_brick.inputs["Scale"].default_value = (1.0, 1.0, 1.0)
+
+    texco_brick = nodes.new("ShaderNodeTexCoord")
+    texco_brick.name = "Texture Coordinate.002"
+    texco_brick.location = (552.7, -380.0)
+    texco_brick.from_instancer = False
+
+    # --- Height -> colour gradient ---------------------------------------
+    mapping_grad = nodes.new("ShaderNodeMapping")
+    mapping_grad.name = "Mapping"
+    mapping_grad.location = (-185.2, 506.7)
+    mapping_grad.vector_type = 'POINT'
+    mapping_grad.inputs["Location"].default_value = (0.6999999284744263, 0.0, 0.0)
+    mapping_grad.inputs["Rotation"].default_value = (0.0, 1.5707999467849731, 0.0)
+    mapping_grad.inputs["Scale"].default_value = (1.0, 1.0, grad_zscale)
+
+    texco_grad = nodes.new("ShaderNodeTexCoord")
+    texco_grad.name = "Texture Coordinate"
+    texco_grad.location = (-365.2, 506.7)
+    texco_grad.from_instancer = False
+
+    gradient = nodes.new("ShaderNodeTexGradient")
+    gradient.name = "Gradient Texture"
+    gradient.location = (6.7, 414.6)
+    gradient.gradient_type = 'LINEAR'
+
+    ramp = nodes.new("ShaderNodeValToRGB")
+    ramp.name = "Color Ramp"
+    ramp.location = (230.5, 379.5)
+    ramp.width = 240.0
+    ramp.color_ramp.color_mode = 'RGB'
+    ramp.color_ramp.hue_interpolation = 'NEAR'
+    ramp.color_ramp.interpolation = 'LINEAR'
+    ramp.color_ramp.elements.remove(ramp.color_ramp.elements[0])
+    e0 = ramp.color_ramp.elements[0]
+    e0.position = 0.0
+    e0.alpha = 1.0
+    e0.color = (0.019999999552965164, 0.019999999552965164,
+                0.08399999886751175, 1.0)
+    e1 = ramp.color_ramp.elements.new(0.9954545497894287)
+    e1.alpha = 1.0
+    e1.color = (0.2624173164367676, 0.7011075019836426, 1.0, 1.0)
+
+    # --- Links ------------------------------------------------------------
+    links.new(mapping_brick.outputs["Vector"], brick.inputs["Vector"])
+    links.new(brick.outputs["Color"], mix.inputs[0])            # Fac
+    links.new(bsdf.outputs["BSDF"], mix.inputs[2])              # 2nd shader
+    links.new(texco_brick.outputs["Object"], mapping_brick.inputs["Vector"])
+    links.new(texco_grad.outputs["Object"], mapping_grad.inputs["Vector"])
+    links.new(mapping_grad.outputs["Vector"], gradient.inputs["Vector"])
+    links.new(gradient.outputs["Color"], ramp.inputs["Fac"])
+    links.new(ramp.outputs["Color"], bsdf.inputs["Base Color"])
+    if "Emission Color" in bsdf.inputs:
+        links.new(ramp.outputs["Color"], bsdf.inputs["Emission Color"])
+    links.new(mix.outputs["Shader"], output.inputs["Surface"])
+
+    print(f"GW shader (twoblue_3 port): grid_scale={grid_scale:g}, "
+          f"grad_zscale={grad_zscale:g}, alpha={alpha:g}, emission={emission:g}")
+    return mat
+
+
+def create_gw_material():
+    """Pick the wave-mesh material. GW_SHADER=brick restores the old look."""
+    if os.environ.get("GW_SHADER", "twoblue3").lower() == "brick":
+        return create_brick_material()
+    return create_gw_shader_material()
 
 
 def create_brick_material(
