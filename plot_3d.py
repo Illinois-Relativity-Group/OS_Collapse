@@ -733,6 +733,52 @@ def link_light(light_obj, receiver, state):
         link_state=state
     )
 
+def create_backdrop_plane():
+    """Bright plane under the wave mesh, ported from blender-gw's white_plane.blend.
+
+    That file holds a single large plane whose material is an RGB node wired
+    straight into Surface, i.e. a flat self-lit colour unaffected by the scene
+    lights. It shows through the mesh cutout as a bright halo and lifts the
+    translucent wave shader, which is why the reference renders read as a solid
+    surface instead of a dark one. Off unless GW_BACKDROP=true.
+    """
+    if os.environ.get("GW_BACKDROP", "false").lower() != "true":
+        return None
+
+    z = float(os.environ.get("GW_BACKDROP_Z", "-100"))
+    size = float(os.environ.get("GW_BACKDROP_SIZE", "6000"))
+    colour = [float(c) for c in os.environ.get(
+        "GW_BACKDROP_COLOR", "0.6066,0.8335,0.9113").split(",")]
+
+    bpy.ops.mesh.primitive_plane_add(size=size, location=(0.0, 0.0, z))
+
+    plane = bpy.context.active_object
+    plane.name = "GWBackdrop"
+
+    mat = bpy.data.materials.new("GWBackdropMaterial")
+    mat.use_nodes = True
+
+    nodes = mat.node_tree.nodes
+    links = mat.node_tree.links
+    nodes.clear()
+
+    rgb = nodes.new("ShaderNodeRGB")
+    rgb.outputs[0].default_value = (colour[0], colour[1], colour[2], 1.0)
+    rgb.location = (-200, 0)
+
+    output = nodes.new("ShaderNodeOutputMaterial")
+    output.location = (100, 0)
+
+    links.new(rgb.outputs["Color"], output.inputs["Surface"])
+
+    plane.data.materials.append(mat)
+    plane.visible_shadow = False
+
+    print(f"GW backdrop: z={z:g}, size={size:g}, colour={tuple(colour)}")
+
+    return plane
+
+
 def setup_world_background():
     world = bpy.context.scene.world
     if world is None:
@@ -889,6 +935,7 @@ def plot_3d(
     setup_camera(plot_wave)
     setup_light()
     setup_world_background()
+    create_backdrop_plane()
     setup_render(render_abs, plot_wave)
 
     # Create density sphere
