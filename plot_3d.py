@@ -7,6 +7,10 @@ import numpy as np
 import sys
 import re
 import scipy
+
+# Blender does not always add the script directory to its module search path.
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from wave_eta import prepare_wave, wave_height, calc_Ylm, MODES
 from mathutils import Vector
 #from shader_grid_solidlightblue import shader_twoblue_3
 
@@ -108,19 +112,15 @@ def plot_GW_trace(
     Draw a 1D h_+(t_ret) trace in the scene, like an inset.
     """
 
-    data = np.loadtxt(wave_file, comments="#")
-
-    coord_time = data[:, 0]
-    r_areal = data[:, 3]
-
-    # IMPORTANT: use h+_20 column
-    hplus = data[:, 6]
-
-    tret = coord_time - r_areal
+    mass = float(os.environ.get("WAVE_M_ADM", "1.00071"))
+    policy = os.environ.get("WAVE_RESTART_POLICY", "latest")
+    data, tret, _ = prepare_wave(wave_file, mass, policy)
+    harmonics = np.array([calc_Ylm(ell, m, np.pi/2, 0).real for ell, m in MODES])
+    hplus = data.eta @ harmonics
 
     if t_window is None:
         tmin = tret.min()
-        tmax = tret.max()
+        tmax = min(current_time, tret.max())
     else:
         tmax = current_time
         tmin = max(tret.min(), current_time - t_window)
@@ -131,7 +131,7 @@ def plot_GW_trace(
     ts = np.linspace(tmin, tmax, n_samples)
     hs = np.interp(ts, tret, hplus, left=0.0, right=0.0)
 
-    hmax = np.nanmax(np.abs(hs))
+    hmax = np.max(np.abs(hplus))
     if hmax == 0:
         hmax = 1.0
 
@@ -225,44 +225,24 @@ def plot_GW(
         Physical time represented by one Blender frame.
     """
 
-    scene = bpy.context.scene
-    print(f"Current time: {current_time}")
-    #current_time = scene.frame_current * time_per_frame
-
-    # --------------------------------------------------------
-    # Read waveform
-    # --------------------------------------------------------
-
-    data = np.loadtxt(wave_file, comments="#")
-
-    coord_time = data[:, 0]
-    r_areal = data[:, 3]
-    hplus = data[:, 6]
-
-    retarded_time = coord_time- r_areal
-
-    # --------------------------------------------------------
-    # Coordinates
-    # --------------------------------------------------------
-
+    # current_time is read from the same field-line header as the star frame.
+    # time_per_frame is retained for CLI compatibility, not used as a clock.
+    mass = float(os.environ.get("WAVE_M_ADM", "1.00071"))
+    policy = os.environ.get("WAVE_RESTART_POLICY", "latest")
+    if NR < 2 or NPHI < 3 or not (0 <= hole_radius < r_max):
+        raise ValueError("GW mesh requires NR>=2, NPHI>=3, and 0<=hole_radius<r_max")
+    if not np.isfinite(height_scale) or height_scale <= 0:
+        raise ValueError("GW height_scale must be finite and positive")
     radii = np.linspace(hole_radius, r_max, NR)
     phis = np.linspace(0, 2 * np.pi, NPHI, endpoint=False)
-
-    u = current_time - radii
-
-    hp = np.interp(
-        u,
-        retarded_time,
-        hplus,
-        left=0.0,
-        right=0.0,
-    )
-
+    hp = wave_height(wave_file, current_time, radii, mass, policy)
+    print(f"ETA waves: t={current_time:g}, M_ADM={mass:g}, "
+          f"max |h+|={np.max(np.abs(hp)):.6e}, display scale={height_scale:g}")
     R, Phi = np.meshgrid(radii, phis, indexing="ij")
-
     X = R * np.cos(Phi)
     Y = R * np.sin(Phi)
-    Z = height_scale * hp[:, None] *1/R
+    # wave_height already includes extraction normalization and 1/r decay.
+    Z = height_scale * hp[:, None]
 
     verts = np.empty((NR * NPHI, 3), dtype=np.float32)
     verts[:, 0] = X.ravel()
@@ -608,7 +588,10 @@ def setup_render(render_path, plot_wave=False):
     scene.render.engine = "CYCLES"
     #scene.render.engine = "BLENDER_EEVEE"
     scene.cycles.device = "CPU"
-    scene.cycles.samples = 64
+    scene.cycles.samples = int(os.environ.get("RENDER_SAMPLES", "64"))
+    scene.render.resolution_percentage = int(os.environ.get("RENDER_PERCENT", "100"))
+    if "RENDER_DENOISE" in os.environ:
+        scene.cycles.use_denoising = os.environ["RENDER_DENOISE"].lower() == "true"
     scene.render.image_settings.file_format = "PNG"
     scene.render.filepath = render_path
     if plot_wave:
@@ -620,6 +603,49 @@ def setup_render(render_path, plot_wave=False):
         scene.render.resolution_y = 1200
     bpy.context.scene.view_settings.view_transform = 'Standard'
     bpy.context.scene.cycles.transparent_max_bounces = 100
+
+def add_time_label(current_time):
+    scene = bpy.context.scene
+    camera = scene.camera
+    distance = max(1.0, camera.data.clip_start * 2)
+    corners = [
+        vertex * (distance / -vertex.z)
+        for vertex in camera.data.view_frame(scene=scene)
+    ]
+    left = min(v.x for v in corners)
+    right = max(v.x for v in corners)
+    bottom = min(v.y for v in corners)
+    top = max(v.y for v in corners)
+    width, height = right - left, top - bottom
+
+    text = bpy.data.curves.new("TimeLabel", type="FONT")
+    text.body = f"t/M = {current_time:.2f}"
+    text.align_x = "RIGHT"
+    text.align_y = "TOP"
+    text.size = height * 0.07
+    text.font = bpy.data.fonts.load(
+        "/usr/share/fonts/truetype/msttcorefonts/Times_New_Roman.ttf"
+    )
+
+    label = bpy.data.objects.new("TimeLabel", text)
+    scene.collection.objects.link(label)
+    label.parent = camera
+    label.location = (right - width * 0.03,
+                      top - height * 0.03, -distance)
+    for ray in ("shadow", "diffuse", "glossy", "transmission", "volume_scatter"):
+        setattr(label, f"visible_{ray}", False)
+
+    material = bpy.data.materials.new("TimeLabelMaterial")
+    material.use_nodes = True
+    nodes = material.node_tree.nodes
+    nodes.clear()
+    emission = nodes.new("ShaderNodeEmission")
+    emission.inputs["Color"].default_value = (1, 1, 1, 1)
+    emission.inputs["Strength"].default_value = 1
+    output = nodes.new("ShaderNodeOutputMaterial")
+    material.node_tree.links.new(emission.outputs[0], output.inputs["Surface"])
+    text.materials.append(material)
+
 
 def setup_camera(plot_wave=False):
     cam_data = bpy.data.cameras.new(name="Camera")
@@ -894,6 +920,7 @@ def plot_3d(
     setup_light()
     setup_world_background()
     setup_render(render_abs, plot_wave)
+    add_time_label(current_time)
 
     # Create density sphere
     if density_abs is not None:

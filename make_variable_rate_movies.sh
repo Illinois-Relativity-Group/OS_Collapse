@@ -3,13 +3,14 @@ set -Eeuo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 OUTPUT_DIR="$ROOT_DIR/output"
+WAVE_IMAGE_SUBDIR="${WAVE_IMAGE_SUBDIR:-images_eta}"
 
 # Measured from adjacent a_p_slice headers.
 SWITCH_INDEX=17600
 BEFORE_DT=0.0090925
 AFTER_DT=0.18525
-BEFORE_SOURCE_FPS=200
-OUTPUT_FPS=200
+BEFORE_SOURCE_FPS=300
+OUTPUT_FPS=300
 
 AFTER_SOURCE_FPS=$(awk -v fps="$BEFORE_SOURCE_FPS" -v before="$BEFORE_DT" -v after="$AFTER_DT" \
     'BEGIN {printf "%.12f", fps * before / after}')
@@ -68,7 +69,7 @@ echo "Encoded output rate        : $OUTPUT_FPS fps"
 
 case "${1:-both}" in
     with-wave)
-        make_movie "$OUTPUT_DIR/images" "$OUTPUT_DIR/magnetised_star_with_wave_variable_rate.mp4"
+        make_movie "$OUTPUT_DIR/$WAVE_IMAGE_SUBDIR" "$OUTPUT_DIR/magnetised_star_with_wave_eta_variable_rate.mp4"
         ;;
     no-wave)
         make_movie "$OUTPUT_DIR/images_no_wave" "$OUTPUT_DIR/magnetised_star_without_wave_variable_rate.mp4"
@@ -77,7 +78,7 @@ case "${1:-both}" in
         make_movie "$OUTPUT_DIR/images_no_wave_bh_test_1000" "$OUTPUT_DIR/black_hole_test_1000frames.mp4"
         ;;
     both)
-        make_movie "$OUTPUT_DIR/images" "$OUTPUT_DIR/magnetised_star_with_wave_variable_rate.mp4"
+        make_movie "$OUTPUT_DIR/$WAVE_IMAGE_SUBDIR" "$OUTPUT_DIR/magnetised_star_with_wave_eta_variable_rate.mp4"
         make_movie "$OUTPUT_DIR/images_no_wave" "$OUTPUT_DIR/magnetised_star_without_wave_variable_rate.mp4"
         ;;
     *) echo "Usage: $0 [with-wave|no-wave|bh-test|both]" >&2; exit 2 ;;
