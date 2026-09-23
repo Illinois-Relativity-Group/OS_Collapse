@@ -11,7 +11,8 @@ import scipy
 # Blender does not always add the script directory to its module search path.
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from wave_eta import prepare_wave, wave_height, calc_Ylm, MODES
-from mathutils import Vector
+from time_bar import time_node_group
+from mathutils import Vector, Matrix
 #from shader_grid_solidlightblue import shader_twoblue_3
 
 # ---------------------------------------------------------
@@ -902,6 +903,87 @@ def link_light(light_obj, receiver, state):
         link_state=state
     )
 
+def create_time_label(camera, current_time):
+    """t/M label, top-right, ported from blender-gw.
+
+    Node group is lib/time_bar.py verbatim (copied in as time_bar.py): a
+    "t/M = " string joined to a Value-to-String whose Decimals input is 0,
+    so the label shows whole numbers only -- "t/M = 0", not "t/M = 0.00".
+    GW_TIME_DECIMALS raises that if the integer label sits still too long.
+
+    blender-gw feeds the node frame_number*PSI4_DT/M_ADM. We already read the
+    coordinate time from the field-line header, so we feed t/M directly.
+
+    Placement follows plot_single.py: parent to the camera, sit in camera
+    space at depth 100. Their numbers are for a 50mm lens; ours is 45mm, so
+    the frame half-extents differ (40.0 x 22.5 vs 36.0 x 20.25) and the
+    position and size are rescaled to keep the same corner and the same
+    ~10% of frame height.
+    """
+    if os.environ.get("GW_TIME_LABEL", "true").lower() != "true":
+        return None
+
+    mass = float(os.environ.get("WAVE_M_ADM", "1.00071"))
+    t_over_m = current_time / mass
+
+    group = time_node_group()
+    for node in group.nodes:
+        if node.name == "Value to String":
+            node.inputs[0].default_value = t_over_m
+            node.inputs[1].default_value = int(
+                os.environ.get("GW_TIME_DECIMALS", "0"))
+            break
+
+    mesh = bpy.data.meshes.new("TimeMesh")
+    obj = bpy.data.objects.new("TimeText", mesh)
+    bpy.context.collection.objects.link(obj)
+    mod = obj.modifiers.new("TimePlot", 'NODES')
+    mod.node_group = group
+
+    # blender-gw's label material is Base Color (0,0,1) with Emission
+    # Strength 1 -- but its Emission Color stays black, so nothing glows.
+    # Their rendered frames show the glyphs at sRGB (198,200,212), so use
+    # that as an emissive colour here: legible over both the bright sheet
+    # and the dark hole, which a lit-only material is not.
+    colour = [float(c) for c in os.environ.get(
+        "GW_TIME_COLOR", "0.573,0.585,0.665").split(",")]
+    mat = bpy.data.materials.new("TimeLabelMaterial")
+    mat.use_nodes = True
+    nodes = mat.node_tree.nodes
+    links = mat.node_tree.links
+    nodes.clear()
+    emit = nodes.new("ShaderNodeEmission")
+    emit.inputs["Color"].default_value = (*colour, 1.0)
+    emit.inputs["Strength"].default_value = 1.0
+    out = nodes.new("ShaderNodeOutputMaterial")
+    links.new(emit.outputs["Emission"], out.inputs["Surface"])
+
+    set_mat = group.nodes.new("GeometryNodeSetMaterial")
+    set_mat.inputs["Material"].default_value = mat
+    group_output = next(n for n in group.nodes if n.type == "GROUP_OUTPUT")
+    last_socket = group_output.inputs["Geometry"].links[0].from_socket
+    group.links.new(last_socket, set_mat.inputs["Geometry"])
+    group.links.new(set_mat.outputs["Geometry"], group_output.inputs["Geometry"])
+
+    depth = 100.0
+    lens = camera.data.lens
+    half_w = depth * (camera.data.sensor_width / 2.0) / lens
+    half_h = half_w * 9.0 / 16.0
+    obj.parent = camera
+    obj.matrix_parent_inverse = Matrix.Identity(4)
+    # 23.25/36.0 and 15.75/20.25: plot_single.py's fractions of the frame.
+    obj.location = Vector((0.6458 * half_w, 0.7778 * half_h, -depth))
+    obj.rotation_euler = (0.0, 0.0, 0.0)
+    scale = 0.12 * (half_h / 20.25)
+    obj.scale = (scale, scale, scale)
+    obj.visible_shadow = False
+
+    print(f"Time label: t/M = {t_over_m:g} "
+          f"(t={current_time:g}, M_ADM={mass:g}), "
+          f"decimals={os.environ.get('GW_TIME_DECIMALS', '0')}")
+    return obj
+
+
 def create_backdrop_plane():
     """Bright plane under the wave mesh, ported from blender-gw's white_plane.blend.
 
@@ -1105,10 +1187,11 @@ def plot_3d(
 
         
     # Setup scene
-    setup_camera(plot_wave)
+    camera = setup_camera(plot_wave)
     setup_light()
     setup_world_background()
     create_backdrop_plane()
+    create_time_label(camera, current_time)
     setup_render(render_abs, plot_wave)
 
     # Create density sphere
