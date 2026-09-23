@@ -10,7 +10,7 @@ import scipy
 
 # Blender does not always add the script directory to its module search path.
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from wave_eta import prepare_wave, wave_height, calc_Ylm, MODES
+from wave_eta import prepare_wave, wave_height, memory_height, calc_Ylm, MODES
 from time_bar import time_node_group
 from mathutils import Vector, Matrix
 #from shader_grid_solidlightblue import shader_twoblue_3
@@ -235,10 +235,31 @@ def plot_GW(
     if not np.isfinite(height_scale) or height_scale <= 0:
         raise ValueError("GW height_scale must be finite and positive")
     radii = np.linspace(hole_radius, r_max, NR)
-    phis = np.linspace(0, 2 * np.pi, NPHI, endpoint=False)
-    hp = wave_height(wave_file, current_time, radii, mass, policy)
-    print(f"ETA waves: t={current_time:g}, M_ADM={mass:g}, "
-          f"max |h+|={np.max(np.abs(hp)):.6e}, display scale={height_scale:g}")
+
+    # test-cut-memory.md: for the cut view only 0 <= phi <= pi is generated
+    # and the last sample is NOT joined back to the first, which leaves an
+    # exposed radial boundary along y = 0 for the side camera to look at.
+    cut = os.environ.get("WAVE_SIDEVIEW_CUT", "false").lower() == "true"
+    if cut:
+        phis = np.linspace(0, np.pi, NPHI)
+    else:
+        phis = np.linspace(0, 2 * np.pi, NPHI, endpoint=False)
+
+    component = os.environ.get("WAVE_COMPONENT", "strain").lower()
+    if component == "memory":
+        ref_t = float(os.environ.get("WAVE_REFERENCE_TIME", "0"))
+        width = float(os.environ.get("WAVE_MEMORY_TRANSITION_WIDTH", "40"))
+        hp = memory_height(wave_file, current_time, radii, mass, policy,
+                           reference_time=ref_t, transition_width=width)
+        print(f"ETA memory: t={current_time:g}, ref t={ref_t:g}, "
+              f"width={width:g}, M_ADM={mass:g}, "
+              f"max |dh+|={np.max(np.abs(hp)):.6e}, "
+              f"display scale={height_scale:g}, cut={cut}")
+    else:
+        hp = wave_height(wave_file, current_time, radii, mass, policy)
+        print(f"ETA waves: t={current_time:g}, M_ADM={mass:g}, "
+              f"max |h+|={np.max(np.abs(hp)):.6e}, "
+              f"display scale={height_scale:g}, cut={cut}")
     R, Phi = np.meshgrid(radii, phis, indexing="ij")
     X = R * np.cos(Phi)
     Y = R * np.sin(Phi)
@@ -255,8 +276,10 @@ def plot_GW(
     # --------------------------------------------------------
 
     ir = np.arange(NR - 1)[:, None]
-    ip = np.arange(NPHI)[None, :]
-    ip2 = (ip + 1) % NPHI
+    # Angular wraparound faces disabled on the cut mesh: stop one sample
+    # short so sample NPHI-1 is never joined to sample 0.
+    ip = np.arange(NPHI - 1 if cut else NPHI)[None, :]
+    ip2 = ip + 1 if cut else (ip + 1) % NPHI
 
     a = ir * NPHI + ip
     b = ir * NPHI + ip2
@@ -792,6 +815,33 @@ def setup_camera(plot_wave=False):
     bpy.context.collection.objects.link(cam)
     bpy.context.scene.camera = cam
 
+    # test-cut-memory.md camera: orthographic, on the negative-y side,
+    # looking straight along the exposed cut toward positive y.
+    if os.environ.get("WAVE_CAMERA", "").lower() == "side_cut":
+        az = np.deg2rad(float(os.environ.get("WAVE_SIDEVIEW_AZIMUTH", "-90")))
+        el = np.deg2rad(float(os.environ.get("WAVE_SIDEVIEW_ELEVATION", "0")))
+        dist = float(os.environ.get("WAVE_SIDEVIEW_DISTANCE", "320.624"))
+        target = Vector((
+            float(os.environ.get("WAVE_SIDEVIEW_TARGET_X", "0")),
+            float(os.environ.get("WAVE_SIDEVIEW_TARGET_Y", "20")),
+            float(os.environ.get("WAVE_SIDEVIEW_TARGET_Z", "-2")),
+        ))
+        offset = Vector((
+            dist * np.cos(el) * np.cos(az),
+            dist * np.cos(el) * np.sin(az),
+            dist * np.sin(el),
+        ))
+        cam.data.type = 'ORTHO'
+        cam.data.ortho_scale = float(
+            os.environ.get("WAVE_SIDEVIEW_ORTHO_SCALE", "90"))
+        cam.data.clip_end = 5000
+        cam.location = target + offset
+        look_at(cam, target)
+        print(f"side_cut camera: az={np.rad2deg(az):g} el={np.rad2deg(el):g} "
+              f"dist={dist:g} target={tuple(target)} "
+              f"ortho_scale={cam.data.ortho_scale:g}")
+        return cam
+
     if plot_wave:
         cam.data.type = 'PERSP'
 
@@ -1001,7 +1051,22 @@ def create_backdrop_plane():
     colour = [float(c) for c in os.environ.get(
         "GW_BACKDROP_COLOR", "0.35,0.38,0.42").split(",")]
 
-    bpy.ops.mesh.primitive_plane_add(size=size, location=(0.0, 0.0, z))
+    # A floor at z is edge-on to the side_cut camera (elevation 0), so it
+    # contributes nothing and the world colour shows instead. blender-gw's
+    # own white_plane.blend is rotated (1.571, 0, 0) -- a vertical wall --
+    # so "wall" is the reference orientation; "auto" picks it for side_cut.
+    orient = os.environ.get("GW_BACKDROP_ORIENT", "auto").lower()
+    if orient == "auto":
+        orient = ("wall" if os.environ.get("WAVE_CAMERA", "").lower()
+                  == "side_cut" else "floor")
+
+    if orient == "wall":
+        wall_y = float(os.environ.get("GW_BACKDROP_WALL_Y", "500"))
+        bpy.ops.mesh.primitive_plane_add(size=size,
+                                         location=(0.0, wall_y, 0.0),
+                                         rotation=(np.pi / 2, 0.0, 0.0))
+    else:
+        bpy.ops.mesh.primitive_plane_add(size=size, location=(0.0, 0.0, z))
 
     plane = bpy.context.active_object
     plane.name = "GWBackdrop"
@@ -1025,7 +1090,8 @@ def create_backdrop_plane():
     plane.data.materials.append(mat)
     plane.visible_shadow = False
 
-    print(f"GW backdrop: z={z:g}, size={size:g}, colour={tuple(colour)}")
+    print(f"GW backdrop: orient={orient}, z={z:g}, size={size:g}, "
+          f"colour={tuple(colour)}")
 
     return plane
 
@@ -1202,14 +1268,17 @@ def plot_3d(
 
 
     # Create geometry-node object
-    field_obj = create_object_with_modifier(
-    node_group=field_line,
-    ply_path=ply_abs,
-    radius=radius,
-    value=int(value),
-    )
+    if os.environ.get("WAVE_HIDE_FIELD_LINES", "false").lower() == "true":
+        print("Field lines hidden (WAVE_HIDE_FIELD_LINES)")
+    else:
+        field_obj = create_object_with_modifier(
+        node_group=field_line,
+        ply_path=ply_abs,
+        radius=radius,
+        value=int(value),
+        )
 
-    field_obj.visible_shadow = False
+        field_obj.visible_shadow = False
 
     # Render
     bpy.ops.render.render(write_still=True)
