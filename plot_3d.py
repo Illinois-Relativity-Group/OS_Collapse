@@ -555,8 +555,8 @@ def create_gw_shader_material(name="GWMaterial"):
     """
     grid_scale = float(os.environ.get("GW_GRID_SCALE", "0.125"))
     grad_zscale = float(os.environ.get("GW_GRAD_ZSCALE", "0.02"))
-    alpha = float(os.environ.get("GW_ALPHA", "0.95"))
-    emission = float(os.environ.get("GW_EMISSION", "1.0"))
+    alpha = float(os.environ.get("GW_ALPHA", "0.75"))
+    emission = float(os.environ.get("GW_EMISSION", "0.0"))
 
     mat = bpy.data.materials.get(name)
     if mat is None:
@@ -779,7 +779,10 @@ def setup_render(render_path, plot_wave=False):
     else:
         scene.render.resolution_x = 1200
         scene.render.resolution_y = 1200
-    bpy.context.scene.view_settings.view_transform = 'Standard'
+    # Reference blender-gw never sets this, so it renders under Blender 5.0's
+    # default AgX. Ours forces Standard. VIEW_TRANSFORM=AgX matches the reference.
+    bpy.context.scene.view_settings.view_transform = os.environ.get(
+        "VIEW_TRANSFORM", "Standard")
     bpy.context.scene.cycles.transparent_max_bounces = 100
 
 def setup_camera(plot_wave=False):
@@ -841,7 +844,8 @@ def setup_light():
     # ---- Light just for GW plane ----
     # Normal sun
     sun_data = bpy.data.lights.new("Sun", type='SUN')
-    sun_data.energy = 4
+    # blender-gw lights its wave mesh with a single SUN at energy 2.5.
+    sun_data.energy = float(os.environ.get("GW_SUN_ENERGY", "4"))
 
     sun = bpy.data.objects.new("Sun", sun_data)
     bpy.context.collection.objects.link(sun)
@@ -854,7 +858,7 @@ def setup_light():
 
     # GW-only sun
     gw_sun_data = bpy.data.lights.new("GW_Sun", type='SUN')
-    gw_sun_data.energy = 2.0
+    gw_sun_data.energy = float(os.environ.get("GW_SUN2_ENERGY", "0.3"))
 
     gw_sun = bpy.data.objects.new("GW_Sun", gw_sun_data)
     bpy.context.collection.objects.link(gw_sun)
@@ -907,13 +911,13 @@ def create_backdrop_plane():
     translucent wave shader, which is why the reference renders read as a solid
     surface instead of a dark one. Off unless GW_BACKDROP=true.
     """
-    if os.environ.get("GW_BACKDROP", "false").lower() != "true":
+    if os.environ.get("GW_BACKDROP", "true").lower() != "true":
         return None
 
     z = float(os.environ.get("GW_BACKDROP_Z", "-100"))
     size = float(os.environ.get("GW_BACKDROP_SIZE", "6000"))
     colour = [float(c) for c in os.environ.get(
-        "GW_BACKDROP_COLOR", "0.6066,0.8335,0.9113").split(",")]
+        "GW_BACKDROP_COLOR", "0.35,0.38,0.42").split(",")]
 
     bpy.ops.mesh.primitive_plane_add(size=size, location=(0.0, 0.0, z))
 
@@ -952,7 +956,11 @@ def setup_world_background():
 
     world.use_nodes = True
     bg = world.node_tree.nodes.get("Background")
-    bg.inputs["Color"].default_value = (0.03, 0.05, 0.15, 1.0) #(0.005, 0.01, 0.08, 1.0)
+    # blender-gw uses (0.006, 0.006, 0.051): near-black, so the sun alone lights
+    # the mesh. WORLD_COLOR overrides ours without touching the default look.
+    world_colour = [float(c) for c in os.environ.get(
+        "WORLD_COLOR", "0.03,0.05,0.15").split(",")]
+    bg.inputs["Color"].default_value = (*world_colour, 1.0)
     bg.inputs["Strength"].default_value = 1.0
 
 
