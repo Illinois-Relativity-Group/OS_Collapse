@@ -695,9 +695,28 @@ def create_gw_shader_material(name="GWMaterial"):
     links.new(texco_grad.outputs["Object"], mapping_grad.inputs["Vector"])
     links.new(mapping_grad.outputs["Vector"], gradient.inputs["Vector"])
     links.new(gradient.outputs["Color"], ramp.inputs["Fac"])
-    links.new(ramp.outputs["Color"], bsdf.inputs["Base Color"])
+
+    # GW_COLOR_MODE=flat drops the height-driven colour variation: the ramp
+    # chain is left in place but bypassed by a constant RGB node, so the
+    # sheet is one colour regardless of z. The default is the ramp colour at
+    # Fac = 0.7, i.e. the value an undisturbed sheet (z = 0) takes in the
+    # gradient mode, so a flat render matches the movie's resting tone.
+    if os.environ.get("GW_COLOR_MODE", "gradient").lower() == "flat":
+        flat = [float(c) for c in os.environ.get(
+            "GW_FLAT_COLOR", "0.1905,0.4990,0.7281").split(",")]
+        rgb = nodes.new("ShaderNodeRGB")
+        rgb.name = "Flat Colour"
+        rgb.location = (230.5, 150.0)
+        rgb.outputs[0].default_value = (flat[0], flat[1], flat[2], 1.0)
+        colour_source = rgb.outputs["Color"]
+        print(f"GW colour: flat {tuple(flat)}")
+    else:
+        colour_source = ramp.outputs["Color"]
+        print("GW colour: height gradient")
+
+    links.new(colour_source, bsdf.inputs["Base Color"])
     if "Emission Color" in bsdf.inputs:
-        links.new(ramp.outputs["Color"], bsdf.inputs["Emission Color"])
+        links.new(colour_source, bsdf.inputs["Emission Color"])
     links.new(mix.outputs["Shader"], output.inputs["Surface"])
 
     print(f"GW shader (twoblue_3 port): grid_scale={grid_scale:g}, "
