@@ -12,6 +12,15 @@ AFTER_DT=0.18525
 BEFORE_SOURCE_FPS=300
 OUTPUT_FPS=300
 
+# Slow the infall down without touching the post-excision rate. The physical
+# rates below are still derived from BEFORE_SOURCE_FPS, so AFTER_SOURCE_FPS is
+# unchanged; this factor is applied to the before-excision repeats only.
+BEFORE_SLOWDOWN="${BEFORE_SLOWDOWN:-1}"
+
+# Stop after this step (inclusive). Step 32900 is t = 299.509, the last frame
+# with t/M <= 300. Empty = no limit.
+MAX_INDEX="${MAX_INDEX:-}"
+
 AFTER_SOURCE_FPS=$(awk -v fps="$BEFORE_SOURCE_FPS" -v before="$BEFORE_DT" -v after="$AFTER_DT" \
     'BEGIN {printf "%.12f", fps * before / after}')
 BEFORE_DURATION=$(awk -v fps="$BEFORE_SOURCE_FPS" 'BEGIN {printf "%.12f", 1.0 / fps}')
@@ -34,7 +43,8 @@ make_movie() {
     # Repeats per source frame = OUTPUT_FPS / source_fps, accumulated as a
     # running fraction so the rounding never drifts.
     local before_reps after_reps
-    before_reps=$(awk -v o="$OUTPUT_FPS" -v s="$BEFORE_SOURCE_FPS" 'BEGIN{printf "%.12f", o/s}')
+    before_reps=$(awk -v o="$OUTPUT_FPS" -v s="$BEFORE_SOURCE_FPS" -v k="$BEFORE_SLOWDOWN" \
+        'BEGIN{printf "%.12f", k*o/s}')
     after_reps=$(awk -v o="$OUTPUT_FPS" -v s="$AFTER_SOURCE_FPS" 'BEGIN{printf "%.12f", o/s}')
 
     local link_dir
@@ -47,6 +57,9 @@ make_movie() {
         number_text="${number_text%.png}"
         [[ "$number_text" =~ ^[0-9]+$ ]] || continue
         index=$((10#$number_text))
+        if [[ -n "$MAX_INDEX" ]] && (( index > MAX_INDEX )); then
+            continue
+        fi
         full_path="$image_dir/$name"
 
         local reps
@@ -75,6 +88,7 @@ make_movie() {
     echo "Creating $output_movie"
     echo "  Frames: $count ($early_count before, $late_count after excision)"
     echo "  Output frames: $emitted at ${OUTPUT_FPS} fps"
+    echo "  Infall slowdown: ${BEFORE_SLOWDOWN}x${MAX_INDEX:+, truncated at step $MAX_INDEX}"
     ffmpeg -y -framerate "$OUTPUT_FPS" -i "$link_dir/f%07d.png" \
         -vf "format=yuv420p" \
         -c:v libx264 -preset slow -crf 18 -movflags +faststart "$output_movie"
