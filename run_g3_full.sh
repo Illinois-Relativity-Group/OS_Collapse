@@ -7,7 +7,7 @@ set -euo pipefail
 cd "$(dirname "$0")"
 
 NW=${NW:-12}
-FINAL=output/images_g3
+FINAL=${FINAL:-output/images_g3}
 mkdir -p "$FINAL"
 
 mapfile -t STEPS < <(ls data/a_p_slice_9000_16_* | sed 's/.*_//' | sed 's/^0*//;s/^$/0/' \
@@ -21,7 +21,7 @@ for ((w=0; w<NW; w++)); do
     hi=$(( (w+1) * N / NW - 1 ))
     (( lo > hi )) && continue
     START=${STEPS[$lo]}; END=${STEPS[$hi]}
-    sub="g3_w$(printf '%02d' $w)"
+    sub="${PREFIX:-g3}_w$(printf '%02d' $w)"
     echo "worker $w: steps $START..$END -> $sub"
     env START="$START" END="$END" STEP=100 THREADS=1 \
         GENERATE_PLY=false GENERATE_RHO=false PLOT_WAVE=true \
@@ -35,6 +35,6 @@ fail=0
 for p in "${pids[@]}"; do wait "$p" || fail=1; done
 
 echo "merging into $FINAL"
-for d in output/g3_w*; do ln -f "$d"/render_*.png "$FINAL"/ 2>/dev/null || true; done
+for d in output/${PREFIX:-g3}_w*; do ln -f "$d"/render_*.png "$FINAL"/ 2>/dev/null || true; done
 echo "frames in $FINAL: $(ls "$FINAL" | wc -l) (expected $N)"
 [[ $fail -eq 0 ]] || echo "WARNING: at least one worker exited non-zero" >&2
