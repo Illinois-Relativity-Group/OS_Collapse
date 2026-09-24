@@ -10,7 +10,7 @@ import scipy
 
 # Blender does not always add the script directory to its module search path.
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from wave_eta import prepare_wave, wave_height, memory_height, calc_Ylm, MODES
+from wave_eta import prepare_wave, wave_height, calc_Ylm, MODES
 from time_bar import time_node_group
 from mathutils import Vector, Matrix
 #from shader_grid_solidlightblue import shader_twoblue_3
@@ -245,21 +245,10 @@ def plot_GW(
     else:
         phis = np.linspace(0, 2 * np.pi, NPHI, endpoint=False)
 
-    component = os.environ.get("WAVE_COMPONENT", "strain").lower()
-    if component == "memory":
-        ref_t = float(os.environ.get("WAVE_REFERENCE_TIME", "0"))
-        width = float(os.environ.get("WAVE_MEMORY_TRANSITION_WIDTH", "40"))
-        hp = memory_height(wave_file, current_time, radii, mass, policy,
-                           reference_time=ref_t, transition_width=width)
-        print(f"ETA memory: t={current_time:g}, ref t={ref_t:g}, "
-              f"width={width:g}, M_ADM={mass:g}, "
-              f"max |dh+|={np.max(np.abs(hp)):.6e}, "
-              f"display scale={height_scale:g}, cut={cut}")
-    else:
-        hp = wave_height(wave_file, current_time, radii, mass, policy)
-        print(f"ETA waves: t={current_time:g}, M_ADM={mass:g}, "
-              f"max |h+|={np.max(np.abs(hp)):.6e}, "
-              f"display scale={height_scale:g}, cut={cut}")
+    hp = wave_height(wave_file, current_time, radii, mass, policy)
+    print(f"ETA waves: t={current_time:g}, M_ADM={mass:g}, "
+          f"max |h+|={np.max(np.abs(hp)):.6e}, "
+          f"display scale={height_scale:g}, cut={cut}")
     R, Phi = np.meshgrid(radii, phis, indexing="ij")
     X = R * np.cos(Phi)
     Y = R * np.sin(Phi)

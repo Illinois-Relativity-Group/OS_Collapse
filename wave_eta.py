@@ -10,6 +10,7 @@ from functools import lru_cache
 import hashlib
 import json
 from pathlib import Path
+import os
 import numpy as np
 from scipy.special import factorial as fact
 
@@ -66,6 +67,24 @@ def sample_eta_clm(time, radius, source_u, clm, mass):
     valid = radius > 2 * mass
     query_u = np.full(radius.shape, source_u[0] - 1.0)
     query_u[valid] = retarded_time(query_time[valid], tortoise_radius(radius[valid], mass))
+    # Off the end of the record np.interp would return 0, which renders as a
+    # flat sheet indistinguishable from "the wave decayed". That silently put a
+    # growing dead zone into the late frames of every movie -- at t = 736.7 only
+    # r >= 175 of a 10..220 mesh still had data -- and it is what made a late
+    # sample read as "no memory". Refuse instead of inventing zeros.
+    # WAVE_ALLOW_OFF_RECORD=true restores the old zero-fill.
+    off = valid & ((query_u < source_u[0]) | (query_u > source_u[-1]))
+    if off.any() and os.environ.get("WAVE_ALLOW_OFF_RECORD", "false").lower() != "true":
+        bad_r = np.asarray(radius)[off]
+        bad_u = query_u[off]
+        raise ValueError(
+            f"{off.sum()} of {valid.sum()} sampled radii fall outside the eta "
+            f"record u=[{source_u[0]:.3f}, {source_u[-1]:.3f}]: "
+            f"r={bad_r.min():.3f}..{bad_r.max():.3f} need "
+            f"u={bad_u.min():.3f}..{bad_u.max():.3f}. "
+            f"Use an earlier time, a smaller r_max, or set "
+            f"WAVE_ALLOW_OFF_RECORD=true to zero-fill them.")
+
     sampled = np.zeros(radius.shape + (clm.shape[1],), dtype=complex)
     for mode in range(clm.shape[1]):
         sampled[..., mode] = np.interp(query_u, source_u, clm[:, mode].real, left=0, right=0)
@@ -255,46 +274,6 @@ def wave_height(path, current_time, radii, mass=1.00071, restart_policy='latest'
     if not np.isfinite(hp).all() or np.any(hc != 0):
         raise ValueError('Invalid axisymmetric eta strain')
     return hp
-
-
-def memory_height(path, current_time, radii, mass=1.00071,
-                  restart_policy='latest', reference_time=0.0,
-                  transition_width=40.0, nsamples=129):
-    """Retained strain offset between two times: the memory proxy.
-
-    test-cut-memory.md calls this "the early-to-late strain-offset proxy
-    implemented in wave_eta.py". No such function existed in this branch, so
-    this is a reconstruction of the definition, not a port:
-
-        h_mem(r, t)  = oscillation-averaged h+(r, t)
-        displayed    = h_mem(r, t) - h_mem(r, reference_time)
-
-    The average is a Gaussian window in retarded time with sigma =
-    transition_width/2, so the burst's oscillations cancel and what survives
-    is the slowly varying (DC) level. WAVE_MEMORY_TRANSITION_WIDTH sets the
-    window; the document's value is 40.
-
-    This is NOT a nonlinear-memory extraction. The eta multipoles carry the
-    oscillatory strain only, so what this returns is the residual offset
-    between two epochs of that signal, which is what the document says it is.
-    """
-    data, source_u, clm = prepare_wave(path, mass, restart_policy)
-    ylm = np.array([calc_Ylm(ell, m, np.pi / 2, 0) for ell, m in MODES])
-    radii = np.asarray(radii)
-
-    offsets = np.linspace(-2.0 * transition_width, 2.0 * transition_width,
-                          nsamples)
-    weights = np.exp(-0.5 * (offsets / (transition_width / 2.0)) ** 2)
-    weights /= weights.sum()
-
-    def averaged(t0):
-        acc = np.zeros(radii.shape, dtype=float)
-        for off, w in zip(offsets, weights):
-            hp, _ = eta_strain(t0 + off, radii, ylm, source_u, clm, mass)
-            acc += w * hp
-        return acc
-
-    return averaged(current_time) - averaged(reference_time)
 
 
 if __name__ == '__main__':

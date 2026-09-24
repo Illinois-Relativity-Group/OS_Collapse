@@ -1,14 +1,12 @@
 #!/bin/bash
-# test-cut-memory.md reproduction, with our locked g3 mesh look instead of
-# the document's teal/brick material and GW-MEM colour mask.
+# test-cut-memory.md cut geometry and camera, with our locked g3 look. Plots
+# plain h+ (the memory is its settled late-time value); the document's
+# smoothed/referenced "memory" proxy was removed -- see the commit that did it.
 set -euo pipefail
 cd "$(dirname "$0")"
 
-export WAVE_COMPONENT="${WAVE_COMPONENT:-memory}"
-export WAVE_REFERENCE_TIME="${WAVE_REFERENCE_TIME:-0}"
 export WAVE_M_ADM="${WAVE_M_ADM:-1.0004}"   # our case; the doc's 1.00071 changes |dh| by 0.01%
 export WAVE_RESTART_POLICY="${WAVE_RESTART_POLICY:-latest}"
-export WAVE_MEMORY_TRANSITION_WIDTH="${WAVE_MEMORY_TRANSITION_WIDTH:-40}"
 
 export WAVE_SIDEVIEW_CUT="${WAVE_SIDEVIEW_CUT:-true}"
 export WAVE_CAMERA="${WAVE_CAMERA:-side_cut}"
