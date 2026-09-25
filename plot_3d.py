@@ -961,6 +961,66 @@ def link_light(light_obj, receiver, state):
         link_state=state
     )
 
+def create_underlight(receivers):
+    """Light under the wave sheet, to lift the field lines beneath it.
+
+    The sheet is translucent, so a light placed below it would normally wash
+    the sheet out from underneath and hide the very lines it is meant to
+    reveal. So the light is LIGHT-LINKED to `receivers` only (the field-line
+    object): it illuminates them and nothing else, leaving the sheet, the
+    star and the horizon lit exactly as before.
+
+    It is never seen directly either -- visible_camera is off, so the lamp
+    contributes illumination without appearing as a shape or a glare.
+
+    Off unless GW_UNDERLIGHT=true. Knobs: GW_UNDERLIGHT_ENERGY,
+    GW_UNDERLIGHT_Z (below the sheet), GW_UNDERLIGHT_SIZE,
+    GW_UNDERLIGHT_COLOR, GW_UNDERLIGHT_TYPE (AREA or POINT).
+    """
+    if os.environ.get("GW_UNDERLIGHT", "false").lower() != "true":
+        return None
+    if not receivers:
+        return None
+
+    kind = os.environ.get("GW_UNDERLIGHT_TYPE", "AREA").upper()
+    energy = float(os.environ.get("GW_UNDERLIGHT_ENERGY", "6000"))
+    z = float(os.environ.get("GW_UNDERLIGHT_Z", "-25"))
+    size = float(os.environ.get("GW_UNDERLIGHT_SIZE", "80"))
+    colour = [float(c) for c in os.environ.get(
+        "GW_UNDERLIGHT_COLOR", "1.0,1.0,1.0").split(",")]
+
+    data = bpy.data.lights.new("UnderLight", type=kind)
+    data.energy = energy
+    data.color = tuple(colour)
+    if kind == "AREA":
+        data.shape = 'DISK'
+        data.size = size
+    else:
+        data.shadow_soft_size = size
+
+    light = bpy.data.objects.new("UnderLight", data)
+    bpy.context.collection.objects.link(light)
+    light.location = (0.0, 0.0, z)
+    light.rotation_euler = (0.0, 0.0, 0.0)   # area lights emit along -Z...
+    if kind == "AREA":
+        light.rotation_euler = (np.pi, 0.0, 0.0)  # ...so flip it to face up
+
+    # Never seen by the camera: illumination only, no lamp shape, no glare.
+    light.visible_camera = False
+
+    bpy.ops.object.select_all(action='DESELECT')
+    light.select_set(True)
+    for obj in receivers:
+        obj.select_set(True)
+    bpy.context.view_layer.objects.active = light
+    bpy.ops.object.light_linking_receivers_link(link_state='INCLUDE')
+
+    print(f"Under-light: {kind} energy={energy:g} z={z:g} size={size:g} "
+          f"colour={tuple(colour)} -> {len(receivers)} receiver(s), "
+          f"camera-invisible")
+    return light
+
+
 def create_time_label(camera, current_time):
     """t/M label, top-right, ported from blender-gw.
 
@@ -1287,6 +1347,7 @@ def plot_3d(
         )
 
         field_obj.visible_shadow = False
+        create_underlight([field_obj])
 
     # Render
     bpy.ops.render.render(write_still=True)
