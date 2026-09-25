@@ -9,8 +9,14 @@ WAVE_IMAGE_SUBDIR="${WAVE_IMAGE_SUBDIR:-images_eta}"
 SWITCH_INDEX=17600
 BEFORE_DT=0.0090925
 AFTER_DT=0.18525
-BEFORE_SOURCE_FPS=300
-OUTPUT_FPS=300
+BEFORE_SOURCE_FPS="${BEFORE_SOURCE_FPS:-300}"
+# 300 fps is far above any display's refresh, so a player has to drop 4 of
+# every 5 frames in real time and does it unevenly -- it reads as the movie
+# speeding up and slowing down. Use OUTPUT_FPS=60 for delivery. Note the
+# infall must then be slow enough to fit: its source rate is
+# BEFORE_SOURCE_FPS/BEFORE_SLOWDOWN, and anything above OUTPUT_FPS gets
+# decimated. At BEFORE_SOURCE_FPS=300 that means BEFORE_SLOWDOWN >= 5.
+OUTPUT_FPS="${OUTPUT_FPS:-300}"
 
 # Slow the infall down without touching the post-excision rate. The physical
 # rates below are still derived from BEFORE_SOURCE_FPS, so AFTER_SOURCE_FPS is
