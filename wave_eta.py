@@ -73,13 +73,18 @@ def sample_eta_clm(time, radius, source_u, clm, mass):
     # r >= 175 of a 10..220 mesh still had data -- and it is what made a late
     # sample read as "no memory". Refuse instead of inventing zeros.
     # WAVE_ALLOW_OFF_RECORD=true restores the old zero-fill.
-    off = valid & ((query_u < source_u[0]) | (query_u > source_u[-1]))
+    # Only the UPPER edge is an error. Below source_u[0] the wave has simply not
+    # reached that radius yet -- u = t - r*(r) is most negative at large r and
+    # early t -- and zero is the physically correct answer there. Past
+    # source_u[-1] the record has ended and the value is unknown, so a zero
+    # there is a fabrication that renders as a flat sheet.
+    off = valid & (query_u > source_u[-1])
     if off.any() and os.environ.get("WAVE_ALLOW_OFF_RECORD", "false").lower() != "true":
         bad_r = np.asarray(radius)[off]
         bad_u = query_u[off]
         raise ValueError(
-            f"{off.sum()} of {valid.sum()} sampled radii fall outside the eta "
-            f"record u=[{source_u[0]:.3f}, {source_u[-1]:.3f}]: "
+            f"{off.sum()} of {valid.sum()} sampled radii fall past the end of "
+            f"the eta record (u_max={source_u[-1]:.3f}): "
             f"r={bad_r.min():.3f}..{bad_r.max():.3f} need "
             f"u={bad_u.min():.3f}..{bad_u.max():.3f}. "
             f"Use an earlier time, a smaller r_max, or set "

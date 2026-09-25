@@ -12,6 +12,14 @@ mkdir -p "$FINAL"
 
 mapfile -t STEPS < <(ls data/a_p_slice_9000_16_* | sed 's/.*_//' | sed 's/^0*//;s/^$/0/' \
                      | awk '$1 % 100 == 0' | sort -n)
+# MAX_STEP: stop after this step. 32900 is t = 299.509, the last frame at or
+# below t/M = 300, which is where the movies are cut anyway -- and it is also
+# below t = 565.66, past which inner radii fall off the eta record.
+if [[ -n "${MAX_STEP:-}" ]]; then
+    filtered=()
+    for st in "${STEPS[@]}"; do (( st <= MAX_STEP )) && filtered+=("$st"); done
+    STEPS=("${filtered[@]}")
+fi
 N=${#STEPS[@]}
 echo "$N frames, $NW workers"
 
