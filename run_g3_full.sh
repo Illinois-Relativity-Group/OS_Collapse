@@ -11,7 +11,7 @@ FINAL=${FINAL:-output/images_g3}
 mkdir -p "$FINAL"
 
 mapfile -t STEPS < <(ls data/a_p_slice_9000_16_* | sed 's/.*_//' | sed 's/^0*//;s/^$/0/' \
-                     | awk '$1 % 100 == 0' | sort -n)
+                     | awk -v st="${STEP:-100}" '$1 % st == 0' | sort -n)
 # MAX_STEP: stop after this step. 32900 is t = 299.509, the last frame at or
 # below t/M = 300, which is where the movies are cut anyway -- and it is also
 # below t = 565.66, past which inner radii fall off the eta record.
@@ -31,10 +31,11 @@ for ((w=0; w<NW; w++)); do
     START=${STEPS[$lo]}; END=${STEPS[$hi]}
     sub="${PREFIX:-g3}_w$(printf '%02d' $w)"
     echo "worker $w: steps $START..$END -> $sub"
-    env START="$START" END="$END" STEP=100 THREADS=1 \
+    env START="$START" END="$END" STEP="${STEP:-100}" THREADS="${THREADS:-1}" \
         GENERATE_PLY=false GENERATE_RHO=false PLOT_WAVE=true \
         IMAGE_SUBDIR="$sub" \
-        WAVE_HEIGHT_SCALE=500000 WAVE_M_ADM=1.0004 \
+        WAVE_HEIGHT_SCALE="${WAVE_HEIGHT_SCALE:-500000}" \
+        WAVE_M_ADM="${WAVE_M_ADM:-1.0004}" \
         ./run_pipeline.sh > "logs/$sub.log" 2>&1 &
     pids+=($!)
 done
