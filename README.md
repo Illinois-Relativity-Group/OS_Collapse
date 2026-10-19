@@ -35,7 +35,10 @@ third-party packages, or `.orig` backups are included.
 From this folder:
 
 ```bash
-START=0 END=25000 STEP=10 THREADS=20 ./run_pipeline.sh
+#This is the movie frame generation setting that I suggest
+Before: START=0 END=25000 STEP=200 THREADS=20
+After: START=0 END=25000 STEP=10 THREADS=20
+START=0 END=25000 STEP=200 THREADS=20 ./run_pipeline.sh
 ./make_variable_rate_movies.sh with-wave
 ```
 
@@ -53,6 +56,20 @@ The scripts retain the original run-specific settings, including physical/render
 parameters, movie timing, and some historical absolute defaults. In particular,
 pass explicit `--a-dir` and `--out-dir` if running `generate_field_lines.py` directly;
 `run_pipeline.sh` already supplies those arguments.
+
+./make_variable_rate_movies.sh now take 
+SWITCH_INDEX=16480
+BEFORE_SOURCE_FPS=20 this is for index step 200
+AFTER_SOURCE_FPS=9.816464237517 this is for index step 10
+Please refer to the following for customized movie
+# Reference: suggested simulation dt per 10-index step.
+# Reconsider these reference intervals if the index step changes.
+# BEFORE_DT=0.0090925
+# AFTER_DT=0.18525
+You can use find_time_switch.py to find switch index
+
+
+
 
 ## Verification
 
