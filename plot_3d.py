@@ -621,6 +621,49 @@ def setup_render(render_path, plot_wave=False):
     bpy.context.scene.view_settings.view_transform = 'Standard'
     bpy.context.scene.cycles.transparent_max_bounces = 100
 
+def add_time_label(current_time):
+    scene = bpy.context.scene
+    camera = scene.camera
+    distance = max(1.0, camera.data.clip_start * 2)
+    corners = [
+        vertex * (distance / -vertex.z)
+        for vertex in camera.data.view_frame(scene=scene)
+    ]
+    left = min(v.x for v in corners)
+    right = max(v.x for v in corners)
+    bottom = min(v.y for v in corners)
+    top = max(v.y for v in corners)
+    width, height = right - left, top - bottom
+
+    text = bpy.data.curves.new("TimeLabel", type="FONT")
+    text.body = f"t/M = {current_time:.0f}"
+    text.align_x = "RIGHT"
+    text.align_y = "TOP"
+    text.size = height * 0.07
+    font_path = "/usr/share/fonts/truetype/msttcorefonts/Times_New_Roman.ttf"
+    if os.path.isfile(font_path):
+        text.font = bpy.data.fonts.load(font_path)
+
+    label = bpy.data.objects.new("TimeLabel", text)
+    scene.collection.objects.link(label)
+    label.parent = camera
+    label.location = (right - width * 0.03,
+                      top - height * 0.03, -distance)
+    for ray in ("shadow", "diffuse", "glossy", "transmission", "volume_scatter"):
+        setattr(label, f"visible_{ray}", False)
+
+    material = bpy.data.materials.new("TimeLabelMaterial")
+    material.use_nodes = True
+    nodes = material.node_tree.nodes
+    nodes.clear()
+    emission = nodes.new("ShaderNodeEmission")
+    emission.inputs["Color"].default_value = (1, 1, 1, 1)
+    emission.inputs["Strength"].default_value = 1
+    output = nodes.new("ShaderNodeOutputMaterial")
+    material.node_tree.links.new(emission.outputs[0], output.inputs["Surface"])
+    text.materials.append(material)
+
+
 def setup_camera(plot_wave=False):
     cam_data = bpy.data.cameras.new(name="Camera")
     cam = bpy.data.objects.new("Camera", cam_data)
@@ -894,6 +937,7 @@ def plot_3d(
     setup_light()
     setup_world_background()
     setup_render(render_abs, plot_wave)
+    add_time_label(current_time)
 
     # Create density sphere
     if density_abs is not None:
