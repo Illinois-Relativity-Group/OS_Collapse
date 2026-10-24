@@ -35,7 +35,7 @@ XY_LIMIT = 3
 # Files
 # ============================================================
 
-rho_files = sorted(RHO_DIR.glob("rho_0_slice_9000_16_*"))
+rho_files = sorted(RHO_DIR.glob("rho_0_slice_15000_16_*"))
 print(f"Found {len(rho_files)} files")
 
 # ============================================================

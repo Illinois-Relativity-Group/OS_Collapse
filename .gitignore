@@ -1,0 +1,8 @@
+__pycache__/
+*.py[cod]
+
+# Local simulation inputs and generated pipeline artifacts.
+data
+logs/
+output/
+*.pid

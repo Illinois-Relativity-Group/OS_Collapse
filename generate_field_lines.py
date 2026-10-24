@@ -174,7 +174,7 @@ def add_segments_to_ply(vertices, edges, segments, point_spacing):
 parser = argparse.ArgumentParser(description="Convert a_p slice files to field-line PLY files")
 parser.add_argument("--a-dir", type=Path,
     default=Path("/data/oscarzhao5/magnetised_star_collapse_3d_2ddata_0706/Test_OS_collapse_magnetized_MHD_RK4_ICN_no_theta_surf_B0.005_Kinnersley/a_p_slice"),
-    help="directory containing a_p_slice_9000_16_* files")
+    help="directory containing a_p_slice_15000_16_* files")
 parser.add_argument("--out-dir", type=Path,
     default=Path("/data/oscarzhao5/magnetised_star_collapse_3d_2ddata_0706/fieldline_ply"),
     help="output directory for field_lines_*.ply")
@@ -191,7 +191,11 @@ OUT_DIR.mkdir(parents=True, exist_ok=True)
 
 # Same number of field-line levels as the picture
 levels = [ 0.00012, 0.0012, 0.0036, 0.0074, 0.0125, 0.0191, 0.0274, 0.0377, 0.0501, 0.0653]
-levels = [x * 0.25 for x in levels]
+# A_phi scales linearly with the initial field strength, so the level array
+# scales with B_0. The shipped 0.25 factor was tuned for the B_0 = 0.002 run
+# (magnetised_star_collapse_3d_2ddata_2026-09-02_B0.002). This case is
+# B_0 = 0.0001 (see OS_Input_Mag), i.e. 20x weaker, so 0.25 * (0.0001/0.002).
+levels = [x * (0.50) for x in levels]
 
 # Smaller = smoother PLY curves, but larger files
 point_spacing = 0.02
@@ -212,7 +216,7 @@ MIN_POINTS = 20
 # Find files
 # ============================================================
 
-a_files = sorted(A_DIR.glob("a_p_slice_9000_16_*"))
+a_files = sorted(A_DIR.glob("a_p_slice_15000_16_*"))
 
 print(f"Found {len(a_files)} files in {A_DIR}")
 

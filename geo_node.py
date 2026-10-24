@@ -23,7 +23,7 @@ def node_group_for_ply(node_tree_names: dict[typing.Callable, str]):
 
     # Socket Path
     path_socket = nodegroup_1.interface.new_socket(name="Path", in_out='INPUT', socket_type='NodeSocketString')
-    path_socket.default_value = "/data/yliang3/magnetised_star/magnetised_star_collapse_3d/equipotential_lines.ply"
+    path_socket.default_value = ""
     path_socket.subtype = 'FILE_PATH'
     path_socket.attribute_domain = 'POINT'
     path_socket.description = "Path to a PLY file"
@@ -308,7 +308,7 @@ def field_line_1_node_group(node_tree_names: dict[typing.Callable, str]):
 
     # Socket Path
     path_socket = field_line_1.interface.new_socket(name="Path", in_out='INPUT', socket_type='NodeSocketString')
-    path_socket.default_value = "/data/yliang3/magnetised_star/magnetised_star_collapse_3d/equipotential_lines.ply"
+    path_socket.default_value = ""
     path_socket.subtype = 'FILE_PATH'
     path_socket.attribute_domain = 'POINT'
     path_socket.description = "Path to a PLY file"

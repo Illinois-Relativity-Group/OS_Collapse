@@ -1,78 +1,18 @@
-# Magnetised star collapse visualization pipeline
+# B0.004 spherical fluid with gravitational waves
 
-Code-only extraction of `magnetised_star_collapse_3d_2ddata_2026-09-02_B0.002`.
-All eight source scripts are copied unchanged, preserving executable permissions.
-No simulation data, generated outputs, logs, PID files, Python caches, bundled
-third-party packages, or `.orig` backups are included.
+Latest cylinder-wall/wider-inset template applied to the 15000_16 dataset.
+No-wave movie is preserved separately. Endpoint step 34400, t=299.699, M=1
+from OS_Input_Mag. Extraction .4, no memory color overlay.
+Main height multiplier 100000, final transition multiplier 10000000;
+matching 1D amplification 1 to 100, red 40pt label inset at (0.88,0.84).
+Radius-10 gray inner wall, smooth orbit to equatorial view, latest wide camera.
+Variable movie timing uses switch 18300 and measured source intervals
+0.08699 / 1.772, retaining the template's early slowdown and 60 fps output.
+Prepared field/density images reused from the same B0.004 no-wave dataset.
+Field level factor 0.50. All 3D and 1D images rendered anew.
+See output/pipeline.status and logs/pipeline.log.
+Run via run_local.sh; it enforces a five-CPU affinity limit.
 
-## Pipeline
-
-1. `generate_field_lines.py`: converts vector-potential slices to field-line PLY files.
-2. `plot_rho.py`: renders density slices to transparent PNG images.
-3. `plot_3d.py`: renders the scene in Blender using `geo_node.py` and `plot_density.py`.
-4. `make_variable_rate_movies.sh`: assembles rendered frames into MP4 movies with FFmpeg.
-
-`run_pipeline.sh` runs steps 1–3. `start_background.sh` launches it in the background.
-
-## Setup
-
-- Python 3 with NumPy, SciPy, and Matplotlib for preprocessing.
-- Blender with its bundled `bpy` and `mathutils`, plus compatible NumPy and SciPy.
-  The scripts were configured for Blender 5.0; `geo_node.py` uses Blender's bundled
-  geometry-node assets.
-- FFmpeg with libx264, Bash, and the command-line utilities used by the shell scripts.
-- Update the hard-coded Blender executable paths in `run_pipeline.sh` for your machine.
-  Its `BLENDER_PYTHONPATH` points to a local `blender_py311_packages` directory that
-  is deliberately omitted here. Supply packages compatible with your Blender Python,
-  or adjust that setting to your installed environment.
-- Supply your own `data/` directory containing `a_p_slice_9000_16_*`,
-  `rho_0_slice_9000_16_*`, `Test_OS_collapse_magnetized_9000_16.hor_surface`,
-  and `Test_OS_collapse_magnetized.wave_extraction.6` when plotting waves.
-  Data and output directories have not been created in this extraction.
-
-## Run after setup
-
-From this folder:
-
-```bash
-#This is the movie frame generation setting that I suggest
-Before: START=0 END=25000 STEP=200 THREADS=20
-After: START=0 END=25000 STEP=10 THREADS=20
-START=0 END=25000 STEP=200 THREADS=20 ./run_pipeline.sh
-./make_variable_rate_movies.sh with-wave
-```
-
-To render without the wave overlay:
-
-```bash
-PLOT_WAVE=false IMAGE_SUBDIR=images_no_wave ./run_pipeline.sh
-./make_variable_rate_movies.sh no-wave
-```
-
-Use `./start_background.sh` for a background run; it creates `logs/` and a PID file.
-The pipeline creates its own `output/` subdirectories.
-
-The scripts retain the original run-specific settings, including physical/render
-parameters, movie timing, and some historical absolute defaults. In particular,
-pass explicit `--a-dir` and `--out-dir` if running `generate_field_lines.py` directly;
-`run_pipeline.sh` already supplies those arguments.
-
-./make_variable_rate_movies.sh now take 
-SWITCH_INDEX=16480
-BEFORE_SOURCE_FPS=20 this is for index step 200
-AFTER_SOURCE_FPS=9.816464237517 this is for index step 10
-Please refer to the following for customized movie
-# Reference: suggested simulation dt per 10-index step.
-# Reconsider these reference intervals if the index step changes.
-# BEFORE_DT=0.0090925
-# AFTER_DT=0.18525
-You can use find_time_switch.py to find switch index
-
-
-
-
-## Verification
-
-Copied scripts were checked for byte-for-byte equality with the source. Python
-syntax and Bash syntax were checked without running the data processing or rendering.
-An end-to-end run requires the omitted data and configured dependencies.
+Render-process label: exe_TOV_peos. Five shared logical CPUs maximum,
+five single-threaded Blender workers, and FFmpeg encoding limited to five threads.
+The original Blender executable path remains visible in full command lines.
