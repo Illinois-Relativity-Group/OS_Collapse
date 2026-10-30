@@ -1,6 +1,7 @@
 ## How to Run
 
 Start by using find_time_switch.py to identify the index where the time step changes.
+You will need to edit line 194 of `generate_field_lines.py` to correctly scale to your magnetic field strength. This code is set up for a a field of 0.002. The code reads `levels = [x * 0.25 for x in levels]`. If for example, you have a field strength of 0.001, change this line to `levels = [x * 0.25 * 0.5 for x in levels]`. This will be updated to be less janky in the future.
 My data had files named like `a_p_slice_15000_16_*`. Your data may be named like `a_p_slice_9000_16_*`. Paths in many files are set up for "15000", if yours differs, you will need to go through each file an update this.
 Use `run_pipeline.sh` from 0 to the time-switch-index using 200-index steps. Then use `run_pipeline.sh` again from the time-switch-index + 10 to whatever index is at t/M=300 using 10-index steps. When you run these make sure that GW waves are turned off. 
 Run `make_variable_rate_movies.sh`. Check you are using the correct image directory name. The frame rate is set to have a continuous 8 t/M per second assuming 200-index steps prior to time-step-change and 10-index steps after. If you change the index step rate, you must scale this accordingly. Do not use a frame rate that is less than 20, this will be visibly jerky. If you encounter this issue, you need to decrease your step size to allow for a frame rate of >20 for the entire movie. The 8 t/M per second is the standard. Check that your final movie is 37.5 seconds.
