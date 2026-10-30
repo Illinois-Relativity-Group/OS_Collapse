@@ -190,8 +190,8 @@ OUT_DIR = args.out_dir.expanduser().resolve()
 OUT_DIR.mkdir(parents=True, exist_ok=True)
 
 # Same number of field-line levels as the picture
-levels = [ 0.00012, 0.0012, 0.0036, 0.0074, 0.0125, 0.0191, 0.0274, 0.0377, 0.0501, 0.0653]
-levels = [x * 0.25 for x in levels]
+levels = [ 0.00003, 0.0003, 0.0009, 0.00185, 0.003125, 0.004775, 0.00685, 0.009425, 0.012525, 0.016325]
+levels = [x * 1 for x in levels]
 
 # Smaller = smoother PLY curves, but larger files
 point_spacing = 0.02
