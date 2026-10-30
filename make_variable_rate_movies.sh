@@ -4,17 +4,21 @@ set -Eeuo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 OUTPUT_DIR="$ROOT_DIR/output"
 
-# Measured from adjacent a_p_slice headers.
-SWITCH_INDEX=17600
-BEFORE_DT=0.0090925
-AFTER_DT=0.18525
-BEFORE_SOURCE_FPS=200
-OUTPUT_FPS=200
 
-AFTER_SOURCE_FPS=$(awk -v fps="$BEFORE_SOURCE_FPS" -v before="$BEFORE_DT" -v after="$AFTER_DT" \
-    'BEGIN {printf "%.12f", fps * before / after}')
-BEFORE_DURATION=$(awk -v fps="$BEFORE_SOURCE_FPS" 'BEGIN {printf "%.12f", 1.0 / fps}')
-AFTER_DURATION=$(awk -v fps="$AFTER_SOURCE_FPS" 'BEGIN {printf "%.12f", 1.0 / fps}')
+# Reference: suggested simulation dt per 10-index step.
+# Reconsider these reference intervals if the index step changes.
+# BEFORE_DT=0.0090925
+# AFTER_DT=0.18525
+
+SWITCH_INDEX=18410
+BEFORE_SOURCE_FPS=45.8666666667
+AFTER_SOURCE_FPS=46.7242232611
+OUTPUT_FPS="$BEFORE_SOURCE_FPS"
+
+BEFORE_DT=$(awk -v fps="$BEFORE_SOURCE_FPS" 'BEGIN {printf "%.12f", 1.0 / fps}')
+AFTER_DT=$(awk -v fps="$AFTER_SOURCE_FPS" 'BEGIN {printf "%.12f", 1.0 / fps}')
+BEFORE_DURATION="$BEFORE_DT"
+AFTER_DURATION="$AFTER_DT"
 
 make_movie() {
     local image_dir="$1"
