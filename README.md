@@ -59,8 +59,8 @@ pass explicit `--a-dir` and `--out-dir` if running `generate_field_lines.py` dir
 
 ./make_variable_rate_movies.sh now take 
 SWITCH_INDEX=16480
-BEFORE_SOURCE_FPS=20 this is for index step 200
-AFTER_SOURCE_FPS=9.816464237517 this is for index step 10
+BEFORE_SOURCE_FPS=45.8666666667
+AFTER_SOURCE_FPS=46.7242232611
 Please refer to the following for customized movie
 # Reference: suggested simulation dt per 10-index step.
 # Reconsider these reference intervals if the index step changes.
@@ -76,3 +76,7 @@ You can use find_time_switch.py to find switch index
 Copied scripts were checked for byte-for-byte equality with the source. Python
 syntax and Bash syntax were checked without running the data processing or rendering.
 An end-to-end run requires the omitted data and configured dependencies.
+
+## Oliver's Changes
+
+The frame rate has been updated to match 8 t/M per second. This assumes a 200-index step before extraction and a 10-index switch after extraction.
