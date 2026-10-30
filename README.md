@@ -1,9 +1,6 @@
-# Magnetised star collapse visualization pipeline
+## How to Run
 
-Code-only extraction of `magnetised_star_collapse_3d_2ddata_2026-09-02_B0.002`.
-All eight source scripts are copied unchanged, preserving executable permissions.
-No simulation data, generated outputs, logs, PID files, Python caches, bundled
-third-party packages, or `.orig` backups are included.
+Start by using find_time_switch.py to identify the index where the time step changes.
 
 ## Pipeline
 
