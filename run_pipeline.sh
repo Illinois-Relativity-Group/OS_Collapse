@@ -7,7 +7,7 @@ OUTPUT_DIR="$ROOT_DIR/output"
 PLY_DIR="$OUTPUT_DIR/fieldline_ply"
 RHO_DIR="$OUTPUT_DIR/rho_movie"
 
-BLENDER_BIN="/home/oscarzhao5/Blender_5.0/blender-5.0.0-linux-x64/blender"
+BLENDER_BIN="/anvil/scratch/x-oscanio/REAL/blender-5.0.0-linux-x64/blender"
 if [[ ! -x "$BLENDER_BIN" ]]; then
     BLENDER_BIN="/data/shared/Blender/Blender_5.0/blender-5.0.0-linux-x64/blender"
 fi
@@ -18,7 +18,7 @@ fi
 
 BLENDER_PYTHONPATH="$ROOT_DIR/blender_py311_packages"
 
-START="${START:-0}"
+START="${START:-24220}"
 END="${END:-25000}"
 STEP="${STEP:-10}"
 THREADS="${THREADS:-20}"
@@ -29,7 +29,7 @@ GENERATE_RHO="${GENERATE_RHO:-true}"
 IMAGE_SUBDIR="${IMAGE_SUBDIR:-images}"
 FORCE_RENDER="${FORCE_RENDER:-false}"
 
-HORIZON_FILE="$DATA_DIR/Test_OS_collapse_magnetized_9000_16.hor_surface"
+HORIZON_FILE="$DATA_DIR/Test_OS_collapse_magnetized_15000_16.hor_surface"
 WAVE_FILE="$DATA_DIR/Test_OS_collapse_magnetized.wave_extraction.6"
 
 mkdir -p "$OUTPUT_DIR/$IMAGE_SUBDIR" "$OUTPUT_DIR/blend_files" "$PLY_DIR" "$RHO_DIR"
@@ -45,7 +45,7 @@ if [[ "$GENERATE_RHO" == "true" ]]; then
         --stride "$STEP" --start "$START" --end "$END"
 fi
 
-for field in "$DATA_DIR"/a_p_slice_9000_16_*; do
+for field in "$DATA_DIR"/a_p_slice_15000_16_*; do
     [[ -e "$field" ]] || continue
     raw_num="${field##*_}"
     num_int=$((10#$raw_num))
