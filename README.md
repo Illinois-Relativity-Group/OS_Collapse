@@ -1,6 +1,9 @@
 ## How to Run
 
 Start by using find_time_switch.py to identify the index where the time step changes.
+My data had files named like `a_p_slice_15000_16_*`. Your data may be named like `a_p_slice_9000_16_*`. Paths in many files are set up for "15000", if yours differs, you will need to go through each file an update this.
+Use `run_pipeline.sh` from 0 to the time-switch-index using 200-index steps. Then us `run_pipeline.sh` again from the time-switch-index + 10 to whatever index is at t/M=300 using 10-index steps. When you run these make sure that GW waves are turned off. 
+Run `make_variable_rate_movies.sh`. Check you are using the correct image directory name. The frame rate is set to have a continuous 8 t/M per second assuming 200-index steps prior to time-step-change and 10-index steps after. If you change the index step rate, you must scale this accordingly. Do not use a frame rate that is less than 20, this will be visibly jerky. If you encounter this issue, you need to decrease your step size to allow for a frame rate of >20 for the entire movie. The 8 t/M per second is the standard. Check that your final movie is 37.5 seconds.
 
 ## Pipeline
 
