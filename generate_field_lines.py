@@ -174,7 +174,7 @@ def add_segments_to_ply(vertices, edges, segments, point_spacing):
 parser = argparse.ArgumentParser(description="Convert a_p slice files to field-line PLY files")
 parser.add_argument("--a-dir", type=Path,
     default=Path("/data/oscarzhao5/magnetised_star_collapse_3d_2ddata_0706/Test_OS_collapse_magnetized_MHD_RK4_ICN_no_theta_surf_B0.005_Kinnersley/a_p_slice"),
-    help="directory containing a_p_slice_9000_16_* files")
+    help="directory containing a_p_slice_15000_16_* files")
 parser.add_argument("--out-dir", type=Path,
     default=Path("/data/oscarzhao5/magnetised_star_collapse_3d_2ddata_0706/fieldline_ply"),
     help="output directory for field_lines_*.ply")
@@ -212,7 +212,7 @@ MIN_POINTS = 20
 # Find files
 # ============================================================
 
-a_files = sorted(A_DIR.glob("a_p_slice_9000_16_*"))
+a_files = sorted(A_DIR.glob("a_p_slice_15000_16_*"))
 
 print(f"Found {len(a_files)} files in {A_DIR}")
 
