@@ -48,11 +48,22 @@ def main() -> None:
         calc_Ylm(ell, m, np.pi / 2, 0).real for ell, m in MODES
     ])
     hplus = (data.eta @ harmonics).real
+    wave_output = args.output_dir / "hplus_1d.csv"
+    np.savetxt(
+        wave_output,
+        np.column_stack((data.time, source_u, hplus, 1.05 * hplus)),
+        delimiter=",",
+        header="coordinate_time,source_retarded_time,hplus_unscaled,hplus_displayed",
+        comments="",
+    )
+    print(f"Wrote h+ time series: {wave_output}", flush=True)
 
     # Show the complete retarded-time interval covered by this movie.  The old
     # significant-signal crop hid the quiet beginning and post-wave evolution.
     observer_delay = float(tortoise_radius(np.array([args.inner_radius]), args.mass)[0])
-    first_field = args.field_dir / f"a_p_slice_15000_16_{args.start:08d}"
+    # A single-frame preview retains the waveform history from time zero.
+    history_start = 0 if args.start == args.end else args.start
+    first_field = args.field_dir / f"a_p_slice_15000_16_{history_start:08d}"
     last_field = args.field_dir / f"a_p_slice_15000_16_{args.end:08d}"
     x_limits = (
         max(0.0, coordinate_time(first_field) - observer_delay),
@@ -127,7 +138,6 @@ def main() -> None:
             print(f"Completed {completed}/{expected}: {destination.name}", flush=True)
 
     plt.close(figure)
-
 
 if __name__ == "__main__":
     main()

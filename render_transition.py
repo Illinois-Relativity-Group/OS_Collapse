@@ -1,6 +1,6 @@
 """Render actual camera-orbit and displacement frames; run inside Blender."""
 from pathlib import Path
-import os, sys, math
+import os, sys, math, json
 import bpy
 import numpy as np
 from mathutils import Vector
@@ -9,7 +9,8 @@ sys.path.insert(0,str(ROOT))
 from process_label import set_render_label
 set_render_label()
 worker, workers = map(int,sys.argv[sys.argv.index('--')+1:])
-OUT=ROOT/'output/cylinder_wall_wider_movie_raw'
+MOVIE_ROOT=Path(os.environ.get('MOVIE_OUTPUT_DIR', ROOT/'output'))
+OUT=MOVIE_ROOT/'cylinder_wall_wider_movie_raw'
 OUT.mkdir(parents=True,exist_ok=True)
 os.environ.update(WAVE_M_ADM='1.0',WAVE_SIDEVIEW_CUT='false',WAVE_HIDE_FIELD_LINES='true',WAVE_CAMERA='',GW_TIME_COLOR='0,0,0',RENDER_SAMPLES='16',RENDER_DENOISE='true',GW_BACKDROP_ORIENT='floor')
 # Build the existing renderer's scene once, without its immediate still render.
@@ -17,7 +18,18 @@ source=(ROOT/'plot_3d.py').read_text()
 source=source.replace('    bpy.ops.render.render(write_still=True)','    pass # Render each animated frame below')
 ns={'__name__':'transition_scene','__file__':str(ROOT/'plot_3d.py')}
 exec(compile(source,str(ROOT/'plot_3d.py'),'exec'),ns)
-ns['plot_3d'](root_dir=str(ROOT),ply_path=str(ROOT/'output/fieldline_ply/field_lines_034400.ply'),density_file=str(ROOT/'output/rho_movie/rho_00034400.png'),render_path=str(OUT/'init.png'),wave_file=str(ROOT/'data/Test_OS_collapse_magnetized.wave_extraction.4'),field_line=str(ROOT/'data/a_p_slice_15000_16_00034400'),horizon_file=str(ROOT/'data/Test_OS_collapse_magnetized_15000_16.hor_surface'),plot_wave=True,hole_radius=10,height_scale=100000,r_max=220,NR=421,NPHI=320,radius=.04,value=2)
+step=34400
+inner_radius=10.
+wave_file=str(ROOT/'data/Test_OS_collapse_magnetized.wave_extraction.4')
+if (MOVIE_ROOT/'plan.json').is_file():
+ plan=json.loads((MOVIE_ROOT/'plan.json').read_text())
+ last=plan.get('transition_state',plan['frames'][-1]);step=last['step']
+ inner_radius=plan['settings'].get('inner_radius',10.)
+ wave_file=plan['wave_source']['input']
+ ns['read_time_from_fieldline']=lambda path:last['time']
+ original_label=ns['create_time_label']
+ ns['create_time_label']=lambda camera,time:original_label(camera,last['label'])
+ns['plot_3d'](root_dir=str(ROOT),ply_path=str(ROOT/f'output/fieldline_ply/field_lines_{step:06d}.ply'),density_file=str(ROOT/f'output/rho_movie/rho_{step:08d}.png'),render_path=str(OUT/'init.png'),wave_file=wave_file,field_line=str(ROOT/f'data/a_p_slice_15000_16_{step:08d}'),horizon_file=str(ROOT/'data/Test_OS_collapse_magnetized_15000_16.hor_surface'),plot_wave=True,hole_radius=inner_radius,height_scale=float(os.environ.get('WAVE_HEIGHT_SCALE','500000')),r_max=220,NR=421,NPHI=320,radius=.04,value=2)
 # Match the approved sample: original radius-10 opening plus one half-plane cut.
 import bmesh
 cut_mesh=bpy.data.objects['GWPlane'].data
@@ -52,7 +64,7 @@ reference.rotation_euler.z=-math.pi/2
 scene=bpy.context.scene
 scene.render.resolution_x=960; scene.render.resolution_y=540
 scene.render.resolution_percentage=100
-scene.render.threads_mode='FIXED'; scene.render.threads=1
+scene.render.threads_mode='FIXED'; scene.render.threads=int(os.environ.get('RENDER_THREADS','1'))
 scene.cycles.seed=42
 cam=scene.camera
 loc0=cam.location.copy(); q0=cam.rotation_euler.to_quaternion()
@@ -68,7 +80,7 @@ coords=np.empty(len(mesh.vertices)*3,dtype=np.float32)
 mesh.vertices.foreach_get('co',coords); coords=coords.reshape(-1,3)
 base_z=coords[:,2].copy()
 # Inner display wall matches the approved cylindrical-cut sample.
-inner_indices=sorted([v.index for v in mesh.vertices if abs(math.hypot(v.co.x,v.co.y)-10)<0.001],key=lambda j: math.atan2(coords[j,1],coords[j,0]))
+inner_indices=sorted([v.index for v in mesh.vertices if abs(math.hypot(v.co.x,v.co.y)-inner_radius)<0.001],key=lambda j: math.atan2(coords[j,1],coords[j,0]))
 assert len(inner_indices)>100
 wall_coords=np.zeros((2*len(inner_indices),3),dtype=np.float32)
 wall_coords[0::2]=coords[inner_indices]
@@ -85,7 +97,10 @@ wall.visible_shadow=False
 back=bpy.data.objects.get('GWBackdrop')
 def ease(x):
  x=min(1.,max(0.,x)); return x*x*x*(10+x*(-15+6*x))
-for i in range(worker,421,workers):
+preview_frames=os.environ.get('TRANSITION_FRAMES')
+frame_indices=([int(i) for i in preview_frames.split(',')] if preview_frames else range(worker,421,workers))
+for i in frame_indices:
+ if not 0 <= i <= 420: raise ValueError(f'Invalid transition frame: {i}')
  path=OUT/f'frame_{i:04d}.png'
  if path.exists(): continue
  p=ease(min(i,240)/240)
@@ -98,7 +113,7 @@ for i in range(worker,421,workers):
   assert cam.location.y == 0. and cam.location.z == 0.
  cam.rotation_euler=(target-cam.location).to_track_quat('-Z','Y').to_euler()
  amp=ease((i-240)/180)
- coords[:,2]=base_z*10**(2*amp)
+ coords[:,2]=base_z*30**amp
  mesh.vertices.foreach_set('co',coords.ravel()); mesh.update()
  # Follow the changing wave height exactly while keeping the other edge at z=0.
  wall_coords[0::2,2]=coords[inner_indices,2]
@@ -121,4 +136,4 @@ for i in range(worker,421,workers):
  set_render_label()
  scene.render.filepath=str(path)
  bpy.ops.render.render(write_still=True)
- print(f'ORBIT_FRAME {i}/420 gain={10**(2*amp):.6f}',flush=True)
+ print(f'ORBIT_FRAME {i}/420 gain={30**amp:.6f}',flush=True)

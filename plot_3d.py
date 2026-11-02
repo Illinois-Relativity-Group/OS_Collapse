@@ -1087,7 +1087,8 @@ def create_time_label(camera, current_time):
 
     depth = 100.0
     lens = camera.data.lens
-    half_w = depth * (camera.data.sensor_width / 2.0) / lens
+    half_w = (camera.data.ortho_scale / 2.0 if camera.data.type == 'ORTHO'
+              else depth * (camera.data.sensor_width / 2.0) / lens)
     half_h = half_w * 9.0 / 16.0
     obj.parent = camera
     obj.matrix_parent_inverse = Matrix.Identity(4)

@@ -109,7 +109,23 @@ def chaikin(points, n_iter=2):
 def extract_contour_segments(cs, ds=0.01):
     segments = []
 
-    for level_segs in cs.allsegs:
+    # Matplotlib 3.8's deprecated allsegs flattens the level grouping and can
+    # turn the inner loop into individual (x,y) points. Read the contour paths
+    # directly and split compound paths at MOVETO to retain separate lines.
+    from matplotlib.path import Path as MplPath
+    level_segments = []
+    for path in cs.get_paths():
+        if not len(path.vertices):
+            continue
+        starts = (np.flatnonzero(path.codes == MplPath.MOVETO)
+                  if path.codes is not None else np.array([0]))
+        for start, end in zip(starts, np.r_[starts[1:], len(path.vertices)]):
+            seg = path.vertices[start:end].copy()
+            if path.codes is not None and path.codes[end-1] == MplPath.CLOSEPOLY:
+                seg[-1] = seg[0]
+            level_segments.append(seg)
+
+    for level_segs in [level_segments]:
         for seg in level_segs:
 
             if len(seg) < 2:
@@ -182,7 +198,13 @@ parser.add_argument("--stride", type=int, default=10,
     help="keep timesteps divisible by this value")
 parser.add_argument("--start", type=int, default=None, help="first timestep to process")
 parser.add_argument("--end", type=int, default=None, help="last timestep to process (inclusive)")
+parser.add_argument("--steps-file", type=Path, help="optional file containing only the required source steps")
+parser.add_argument("--worker", type=int, default=0)
+parser.add_argument("--workers", type=int, default=1)
 args = parser.parse_args()
+if not 0 <= args.worker < args.workers:
+    parser.error('worker must be in [0, workers)')
+selected_steps = set(map(int, args.steps_file.read_text().split())) if args.steps_file else None
 
 A_DIR = args.a_dir.expanduser().resolve()
 OUT_DIR = args.out_dir.expanduser().resolve()
@@ -242,6 +264,10 @@ for a_file in a_files:
     if args.start is not None and frame_number < args.start:
         continue
     if args.end is not None and frame_number > args.end:
+        continue
+    if selected_steps is not None and frame_number not in selected_steps:
+        continue
+    if (frame_number // FRAME_STRIDE) % args.workers != args.worker:
         continue
 
     frame_padded = f"{frame_number:06d}"
@@ -362,7 +388,8 @@ for a_file in a_files:
 
     plt.close(fig)
 
-    with open(outfile, "w") as f:
+    temporary_outfile = outfile.with_suffix('.partial.ply')
+    with open(temporary_outfile, "w") as f:
         f.write("ply\n")
         f.write("format ascii 1.0\n")
 
@@ -383,6 +410,7 @@ for a_file in a_files:
         for i, j in edges:
             f.write(f"{i} {j}\n")
 
+    temporary_outfile.replace(outfile)
     print(f"  Saved {outfile}")
     print(f"  Vertices = {len(vertices)}")
     print(f"  Edges    = {len(edges)}")

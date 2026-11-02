@@ -1,0 +1,10 @@
+{
+  "preflight_passed": true,
+  "reused_raw_frames": 2251,
+  "reuse_source": "/anvil/scratch/x-xzhao14/os_collapse_B0004_spherical_with_gw/output/extraction_r400/temporal_8_tM_to400",
+  "extraction_radius": 400,
+  "endpoint": 300,
+  "main_seconds": 37.5,
+  "total_seconds": 47.5,
+  "red_memory": true
+}

@@ -17,7 +17,13 @@ parser.add_argument("--out-dir", type=Path, required=True)
 parser.add_argument("--stride", type=int, default=10)
 parser.add_argument("--start", type=int, default=None)
 parser.add_argument("--end", type=int, default=None)
+parser.add_argument("--steps-file", type=Path)
+parser.add_argument("--worker", type=int, default=0)
+parser.add_argument("--workers", type=int, default=1)
 args = parser.parse_args()
+if not 0 <= args.worker < args.workers:
+    parser.error('worker must be in [0, workers)')
+selected_steps = set(map(int, args.steps_file.read_text().split())) if args.steps_file else None
 
 RHO_DIR = args.rho_dir.expanduser().resolve()
 OUTPUT_DIR = args.out_dir.expanduser().resolve()
@@ -84,6 +90,10 @@ for filename in rho_files:
     if args.start is not None and frame_number < args.start:
         continue
     if args.end is not None and frame_number > args.end:
+        continue
+    if selected_steps is not None and frame_number not in selected_steps:
+        continue
+    if (frame_number // args.stride) % args.workers != args.worker:
         continue
 
     output_file = OUTPUT_DIR / f"rho_{frame_number:08d}.png"
@@ -196,8 +206,9 @@ for filename in rho_files:
     # --------------------------------------------------------
     # save transparent PNG
     # --------------------------------------------------------
+    temporary_output = output_file.with_suffix('.partial.png')
     plt.savefig(
-        output_file,
+        temporary_output,
         dpi=200,
         bbox_inches="tight",
         pad_inches=0,
@@ -205,6 +216,7 @@ for filename in rho_files:
     )
 
     plt.close()
+    temporary_output.replace(output_file)
 
     print(f"Saved {output_file}")
 

@@ -1,0 +1,9 @@
+{
+  "job_id": 21873715,
+  "script": "finish_radius400_to300.slurm",
+  "extraction_radius": 400,
+  "coordinate_endpoint": 300,
+  "main_seconds": 37.5,
+  "total_seconds": 47.5,
+  "reuses_main_3d_frames": true
+}

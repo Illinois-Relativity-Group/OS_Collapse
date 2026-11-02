@@ -6,3 +6,16 @@ data
 logs/
 output/
 *.pid
+
+# Local rendering dependencies and caches.
+/data
+/blender
+/blender_packages/
+/bin/
+/output/
+/logs/
+.cache/
+.venv*/
+*.pyc
+*.mp4
+*.blend
