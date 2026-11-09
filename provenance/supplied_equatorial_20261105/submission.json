@@ -1,0 +1,16 @@
+{
+  "preview_job": 21983412,
+  "render_array": 21983413,
+  "assembly_job": 21983414,
+  "source": "inputs/equatorial_wave_supplied_20261105.dat",
+  "comparison_radius": 400,
+  "coordinate_endpoint": 300,
+  "inner_radius": 15.25,
+  "main_seconds": 37.5,
+  "total_seconds": 47.5,
+  "pipeline": [
+    "preview_supplied_wave.slurm",
+    "render_supplied_wave_chunks.slurm",
+    "finish_supplied_wave_chunks.slurm"
+  ]
+}

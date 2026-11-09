@@ -1,0 +1,23 @@
+{
+  "input": "/anvil/scratch/x-xzhao14/os_collapse_B0004_spherical_with_gw/inputs/equatorial_wave_supplied_20261105.dat",
+  "sha256": "6572b325f2c89e1c76df9d99095290945ee0b8766c9b452135877a594bda52f5",
+  "format": "equatorial_radius_weighted",
+  "input_rows": 18672,
+  "B0": 0.004,
+  "source_extraction_radius": null,
+  "source_retarded_time_start": -372.4613303,
+  "source_retarded_time_end": 281.0236697,
+  "normalization": "r*hplus_equator = supplied second column * B0^2; already angularly projected",
+  "additional_wave_harmonic_factor": false,
+  "time_shift": 0.0,
+  "r_ext": 400.0,
+  "r_ext_role": "Chosen comparison radius; source extraction radius not specified by supplied file",
+  "diagnostics_passed": true,
+  "tested_radii": [
+    15.25,
+    220.0,
+    400.0
+  ],
+  "angular_reconstruction": "Not performed: file already contains equatorial strain",
+  "csv_coordinate_time": "Reference observer coordinate time u+r*(comparison_radius), not source simulation timestamps"
+}

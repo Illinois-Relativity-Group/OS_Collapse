@@ -257,6 +257,10 @@ def diagnostics(data, mass, output):
 
 @lru_cache(maxsize=4)
 def _prepare(path, mtime_ns, size, mass, restart_policy):
+    from supplied_equatorial import is_equatorial_file, load_equatorial
+    if is_equatorial_file(path):
+        data = load_equatorial(path)
+        return data, data.u, None
     data = load_eta(path, restart_policy)
     return data, source_retarded_times(data, mass), data.clm
 
@@ -274,6 +278,8 @@ def wave_height(path, current_time, radii, mass=1.0, restart_policy='latest'):
     h+ at extraction equals sum(eta_l0 * spin_minus_2_Y_l0).
     """
     data, source_u, clm = prepare_wave(path, mass, restart_policy)
+    if clm is None:
+        return data.strain(current_time, radii, mass)
     ylm = np.array([calc_Ylm(ell, m, np.pi/2, 0) for ell, m in MODES])
     hp, hc = eta_strain(current_time, np.asarray(radii), ylm, source_u, clm, mass)
     if not np.isfinite(hp).all() or np.any(hc != 0):

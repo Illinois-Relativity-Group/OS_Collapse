@@ -1,0 +1,17 @@
+{
+  "preflight_passed": true,
+  "source_sha256": "6572b325f2c89e1c76df9d99095290945ee0b8766c9b452135877a594bda52f5",
+  "samples": 18672,
+  "u_min": -372.4613303,
+  "u_max": 281.0236697,
+  "maximum_required_u": 280.9682992562554,
+  "comparison_radius": 400,
+  "black_1d_formula": "second column * 0.004**2 / 400",
+  "surface_formula": "interpolate second column at t-r*(r) * 0.004**2 / r",
+  "additional_wave_harmonic": false,
+  "red_memory_unchanged": true,
+  "axis_labels_retained": true,
+  "main_frames": 2250,
+  "transition_frames": 600,
+  "total_seconds": 47.5
+}

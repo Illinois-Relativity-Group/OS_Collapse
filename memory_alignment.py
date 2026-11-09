@@ -52,8 +52,12 @@ class MemoryComparison:
         plan = json.loads((work/'plan.json').read_text())
         if 'wave_source' not in plan:
             return cls()
-        return cls(endpoint=plan['comparison_endpoint'], wave_path=work/'hplus_1d.csv',
-                   extraction_radius=plan['wave_source']['r_ext'])
+        model = cls(endpoint=plan['comparison_endpoint'], wave_path=work/'hplus_1d.csv',
+                    extraction_radius=plan['wave_source']['r_ext'])
+        if plan['wave_source'].get('format') == 'equatorial_radius_weighted':
+            model.report['comparison_radius_role'] = 'Chosen reference radius; supplied source extraction radius is unspecified'
+            model.report['waveform_method'] = 'Supplied r*eta(pi/2)/B0^2 * 0.004^2 / comparison_radius; no extra harmonic'
+        return model
 
     def memory_at(self, u):
         return np.interp(u, self.mu, self.physical, left=np.nan, right=np.nan)
@@ -73,8 +77,8 @@ class MemoryComparison:
             ax.set(xlabel=r'$t_{\rm ret}$',ylabel='Unamplified amplitude')
             ax.ticklabel_format(axis='y',style='sci',scilimits=(0,0))
             ax.grid(alpha=.2)
-            ax.legend(fontsize=9)
-        axes[0].set(xlim=(0,self.endpoint),title=f"Extraction radius {self.report['coordinate_radius']:g}")
+        radius_label = 'Comparison radius' if 'comparison_radius_role' in self.report else 'Extraction radius'
+        axes[0].set(xlim=(0,self.endpoint),title=f"{radius_label} {self.report['coordinate_radius']:g}")
         mask=grid>=180
         values=np.r_[eta[mask],memory[mask]]
         pad=.12*float(np.ptp(values))
@@ -101,8 +105,6 @@ class MemoryInset:
         self.hlabel=self.ax.text(0,0,r'$h_+$',fontsize=28,ha='right',va='center')
         self.tlabel=self.ax.text(0,0,r'$t_{\rm ret}$',fontsize=28,ha='left',va='top')
         self.scale=self.ax.text(.92,.76,'',transform=self.ax.transAxes,color='red',fontsize=32,ha='right',va='top')
-        self.legend=self.ax.legend(loc='upper left',bbox_to_anchor=(.14,.995),frameon=False,
-                                   fontsize=17,borderaxespad=0,handlelength=1.3)
         self.fig.subplots_adjust(left=.15,right=.985,bottom=.11,top=.985)
 
     def draw(self,current_u,gain=1.,colour='white',width=365):
@@ -125,9 +127,6 @@ class MemoryInset:
         self.memory.set_data(mu,1.05*gain*self.model.memory_at(mu))
         for artist in [self.wave,self.zero,self.vertical,self.hlabel,self.tlabel,*self.ax.spines.values()]:
             artist.set_color(colour)
-        self.legend.get_texts()[0].set_color(colour)
-        self.legend.legend_handles[0].set_color(colour)
-        self.legend.get_texts()[1].set_color(MEMORY_COLOR)
         self.hlabel.set_position((-.015*span,self.extent))
         self.tlabel.set_position((1.015*span,-.03*self.extent))
         self.scale.set_text('' if gain<=1.00001 else rf'$\times {gain:.0f}$')

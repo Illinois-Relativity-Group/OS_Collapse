@@ -14,18 +14,26 @@ import numpy as np
 
 from memory_alignment import MemoryComparison
 from overlay_wave_1d_full_movie import coordinate_time
-from wave_eta import MODES, calc_Ylm, diagnostics, load_eta, source_retarded_times, tortoise_radius, wave_height
+from wave_eta import MODES, calc_Ylm, diagnostics, load_eta, prepare_wave, source_retarded_times, tortoise_radius, wave_height
+from supplied_equatorial import EquatorialWave
 
 ROOT = Path(__file__).resolve().parent
 DEFAULT_WORK = ROOT/'output/extraction_r500/temporal_8_tM'
 
 
-def prepare(work, wave_file, retarded_end, coordinate_end=None, inner_radius=10.):
+def prepare(work, wave_file, retarded_end, coordinate_end=None, inner_radius=10., comparison_radius=400.):
     work.mkdir(parents=True, exist_ok=True)
     if (work/'plan.json').exists():
         raise FileExistsError('Plan already exists; use run to resume or choose a new work directory')
-    data = load_eta(wave_file, 'latest')
-    source_u = source_retarded_times(data, 1.)
+    data, source_u, _ = prepare_wave(wave_file)
+    supplied = isinstance(data, EquatorialWave)
+    if supplied:
+        if not np.isfinite(comparison_radius) or comparison_radius <= 2:
+            raise ValueError('Comparison radius must be finite and greater than 2 M')
+        source_report = dict(data.report, r_ext=comparison_radius,
+                             r_ext_role='Chosen comparison radius; source extraction radius not specified by supplied file')
+    else:
+        source_report = data.report
     delay = float(tortoise_radius(inner_radius, 1.))
     if coordinate_end is not None and coordinate_end-delay > source_u[-1]:
         raise ValueError(f't={coordinate_end:g} at inner radius {inner_radius:g} needs '
@@ -63,11 +71,28 @@ def prepare(work, wave_file, retarded_end, coordinate_end=None, inner_radius=10.
     # Test every main-frame time at the inner mesh edge (largest queried u).
     # The outer edge and angular samples are checked by the renderer as well.
     wave_height(wave_file, np.array([f['time'] for f in frames]), np.full(len(frames),inner_radius))
-    diagnostics(data, 1., work/'gw_diagnostics')
-    y = np.array([calc_Ylm(l,m,np.pi/2,0).real for l,m in MODES])
-    hp = data.eta@y
-    np.savetxt(work/'hplus_1d.csv',np.column_stack((data.time,source_u,hp,1.05*hp)),delimiter=',',
-               header='coordinate_time,source_retarded_time,hplus_unscaled,hplus_displayed',comments='')
+    if supplied:
+        hp = data.radius_weighted_hp/comparison_radius
+        coordinate_times = source_u+float(tortoise_radius(comparison_radius,1.))
+        diagnostic_dir = work/'gw_diagnostics'; diagnostic_dir.mkdir(exist_ok=True)
+        for radius in (inner_radius, 220., comparison_radius):
+            recovered = wave_height(wave_file, source_u+tortoise_radius(radius,1.),
+                                    np.full(len(source_u),radius))
+            np.testing.assert_allclose(recovered, data.radius_weighted_hp/radius,
+                                       rtol=1.e-9, atol=1.e-18)
+        (diagnostic_dir/'equatorial_diagnostics.json').write_text(json.dumps(dict(
+            source_report, diagnostics_passed=True, tested_radii=[inner_radius,220.,comparison_radius],
+            angular_reconstruction='Not performed: file already contains equatorial strain',
+            csv_coordinate_time='Reference observer coordinate time u+r*(comparison_radius), not source simulation timestamps'
+        ),indent=2)+'\n')
+    else:
+        diagnostics(data, 1., work/'gw_diagnostics')
+        y = np.array([calc_Ylm(l,m,np.pi/2,0).real for l,m in MODES])
+        hp = data.eta@y
+        coordinate_times = data.time
+    np.savetxt(work/'hplus_1d.csv',np.column_stack((coordinate_times,source_u,hp,1.05*hp)),delimiter=',',
+               header=('reference_observer_coordinate_time' if supplied else 'coordinate_time')+
+                      ',source_retarded_time,hplus_unscaled,hplus_displayed',comments='')
     needed = sorted({f['step'] for f in frames})
     distinct_wave_times = len(frames)
     coordinate_endpoint = frames[-1]['time']
@@ -79,14 +104,16 @@ def prepare(work, wave_file, retarded_end, coordinate_end=None, inner_radius=10.
                 transition_frames=600,total_frames=len(frames)+600,total_seconds=len(frames)/60+10,
                 source_endpoint=times[-1],movie_coordinate_endpoint=coordinate_endpoint,
                 comparison_endpoint=last_u,source_retarded_time_start=float(source_u[0]),
-                source_retarded_time_end=float(source_u[-1]),wave_source=data.report,
+                source_retarded_time_end=float(source_u[-1]),wave_source=source_report,
                 distinct_source_snapshots=len(needed),distinct_wave_times=distinct_wave_times,
                 max_nearest_source_time_error=max(abs(f['source_time_error']) for f in frames),
                 wave_time_spacing=8/60,source_step_stride=10,
                 source_fields='Nearest dense simulation snapshot; cached field and density preprocessing',
-                gravitational_wave='Fresh eta reconstruction at every video time, all l=2,4,6,8 m=0',
-                memory_formula=f'Given total memory * B0^2 / {data.report["r_ext"]:g} * spin(-2)Y20(pi/2,0)',
-                radius_convention='Memory divided by coordinate extraction radius; propagation uses time-dependent areal radius',
+                gravitational_wave=('Supplied equatorial waveform * B0^2 / observer radius; no additional harmonic factor'
+                                    if supplied else 'Fresh eta reconstruction at every video time, all l=2,4,6,8 m=0'),
+                memory_formula=f'Given total memory * B0^2 / {source_report["r_ext"]:g} * spin(-2)Y20(pi/2,0)',
+                radius_convention=('1D wave and memory divided by chosen comparison radius; supplied retarded times used directly'
+                                   if supplied else 'Memory divided by coordinate extraction radius; propagation uses time-dependent areal radius'),
                 counter='Original Blender label, floor(8 * video_seconds)',
                 settings=dict(height_scale=500000,NR=421,NPHI=320,samples=16,width=960,height=540,
                               inner_radius=inner_radius),frames=frames)
@@ -128,7 +155,10 @@ def comparison_plots(work, plan):
     weighted_memory = memory*new_r
     fig,ax = plt.subplots(figsize=(10,5),layout='constrained')
     ax.plot(u,112*old_hp,label='Extraction radius 112')
-    ax.plot(u,new_r*wave,label=f'Extraction radius {new_r:g}')
+    new_label = (f'Supplied waveform, reference radius {new_r:g}'
+                 if plan['wave_source'].get('format') == 'equatorial_radius_weighted'
+                 else f'Extraction radius {new_r:g}')
+    ax.plot(u,new_r*wave,label=new_label)
     ax.plot(u,weighted_memory,label='Given total memory × B0² × Y20',color='black',ls='--')
     mask = u>=180
     values = np.r_[112*old_hp[mask],new_r*wave[mask],weighted_memory[mask]]
@@ -197,11 +227,12 @@ def main():
     parser.add_argument('--retarded-end',type=float,default=280.)
     parser.add_argument('--coordinate-end',type=float,help='Exact final coordinate time; reject unsupported wave coverage')
     parser.add_argument('--inner-radius',type=float,default=10.)
+    parser.add_argument('--comparison-radius',type=float,default=400.,help='Reference radius for an already projected two-column waveform')
     parser.add_argument('--workers',type=int,default=32)
     parser.add_argument('--threads',type=int,default=4)
     args=parser.parse_args()
     if args.stage=='prepare':prepare(args.work.resolve(),args.wave_file.resolve(),args.retarded_end,
-                                    args.coordinate_end,args.inner_radius)
+                                    args.coordinate_end,args.inner_radius,args.comparison_radius)
     else:run(args.work.resolve(),args.workers,args.threads)
 
 
